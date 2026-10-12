@@ -12,6 +12,12 @@
 | [docx-track-changes-wps](./docx-track-changes-wps/) | 用 python-docx + lxml 向 .docx 写入真正的"修订模式"（tracked changes），并规避 WPS 打开时彩虹圈卡死的各种坑 |
 | [relation-scope](./relation-scope/) | 人际关系智能分析：聊天记录 / 日记 / 场景重现多输入，输出情感倾向、情绪识别、关系走向、行为模式等多维报告 |
 
+## 实践笔记
+
+| 文档 | 内容 |
+|---|---|
+| [公文写作风格校准实战笔记](./notes/gongwen-style-calibration.md) | 来自真实申报场景的 10 条措辞口径（每条附机制层理由）+ 表格化材料量化检查的 4 条硬经验 + 口径维护方法，可独立于任何工具使用 |
+
 ## 使用
 
 把对应的 skill 文件夹复制到你的 agent skills 目录即可（例如 `~/.workbuddy/skills/` 或 Claude Code 的 `~/.claude/skills/`）。每个文件夹内的 `SKILL.md` 是入口。
