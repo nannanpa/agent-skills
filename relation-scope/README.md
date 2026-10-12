@@ -1,6 +1,6 @@
 # relation-scope
 
-人际关系智能分析技能包（v3.1）。
+人际关系智能分析技能包（v3.2）。
 
 ## 输入
 
@@ -14,7 +14,7 @@
 
 ## 使用
 
-把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`）。快速上手见 [QUICKSTART.md](./QUICKSTART.md)，完整方法论见 [SKILL.md](./SKILL.md)。
+把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`）。快速上手见 [QUICKSTART.md](./QUICKSTART.md)，完整方法论见 [SKILL.md](./SKILL.md)，扩展与自定义场景见 [EXTENSIONS.md](./EXTENSIONS.md)。
 
 > 提示：分析对象应是用户自己的关系数据；请勿投入真实他人隐私数据做非授权分析。
 
