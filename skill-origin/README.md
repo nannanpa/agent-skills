@@ -36,3 +36,9 @@ python3 scripts/provenance.py all            # 全量体检 skills 目录
 ## 适用范围
 
 任何采用 SKILL.md 格式（Agent Skills 规范）的 agent 环境，拷进技能目录即可；不依赖特定平台 API。
+
+## 发布记录
+
+> 本目录只保留最新版；历史版本见 git 提交记录。
+
+- **2026-10-12 首发**：四级判定矩阵 + provenance.py（纯标准库零依赖）+ 厂商官方档/OFFICIAL_ORGS 白名单（含一次"命名之争"：provenance 留括号，origin 占名位）

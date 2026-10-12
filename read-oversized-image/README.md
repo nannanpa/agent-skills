@@ -15,6 +15,12 @@
 
 把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`）。
 
+## 发布记录
+
+> 本目录只保留最新版；历史版本见 git 提交记录。
+
+- **2026-10-12 首发**：macOS 原生 sips 分块降采样，破解 Read 工具读超大图片的压缩失败
+
 ## License
 
 MIT

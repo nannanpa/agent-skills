@@ -17,6 +17,12 @@ WPS 对修订 XML 极其敏感，手写的 `w:ins`/`w:del` 很容易触发"彩�
 
 把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`），脚本在 `scripts/apply_track_changes.py`。
 
+## 发布记录
+
+> 本目录只保留最新版；历史版本见 git 提交记录。
+
+- **2026-10-12 首发**：python-docx + lxml 给 .docx 插入修订模式（tracked changes，兼容 WPS）
+
 ## License
 
 MIT
