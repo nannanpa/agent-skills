@@ -14,6 +14,7 @@
 | [docx-track-changes-wps](./docx-track-changes-wps/) | 用 python-docx + lxml 向 .docx 写入真正的"修订模式"（tracked changes），并规避 WPS 打开时彩虹圈卡死的各种坑 |
 | [relation-scope](./relation-scope/) | 人际关系智能分析：聊天记录 / 日记 / 场景重现多输入，输出情感倾向、情绪识别、关系走向、行为模式等多维报告 |
 | [grill-me-gongwen](./grill-me-gongwen/) | 方案拷问（公文规划版）：动笔前把方案建模为决策树、分轮盘问、每问必附推荐答案，事实 AI 自查、决策你拍板，收敛后才产出。基于 [Matt Pocock grill-me](https://github.com/mattpocock/skills)（MIT）改造 |
+| [minfadian](./minfadian/) | 民法典法条速查：1260 条全文按 7 编 84 章 85 个分册存储，配场景速查表、术语定位、高频判断规则三层导航；零依赖纯文本，拷即用 |
 
 ## 实践笔记
 
