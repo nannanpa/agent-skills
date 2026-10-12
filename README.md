@@ -1,6 +1,8 @@
 # workbuddy-skills
 
-实战中沉淀的 Agent Skills（WorkBuddy / CodeBuddy 可用，兼容 Anthropic Agent Skills 规范）。全部来自真实办公场景的反复使用与打磨，而非一次性生成。
+实战中沉淀的 Agent Skills，来自真实办公场景的反复使用与打磨，而非一次性生成。
+
+**不绑定特定产品**：遵循开放的 [Agent Skills 规范](https://agentskills.io)，`SKILL.md` + 脚本的结构可在 Claude Code、Claude 桌面版、WorkBuddy、CodeBuddy 等任何支持该规范的 agent 中直接使用；不支持的 agent 也可把 SKILL.md 当作操作手册直接投喂。
 
 ## Skills
 
