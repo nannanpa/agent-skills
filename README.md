@@ -2,6 +2,8 @@
 
 实战中沉淀的 Agent Skills，来自真实办公场景的反复使用与打磨，而非一次性生成。
 
+**聚焦场景：高校"发展规划与学科建设"条线**——项目申报书、"十五五"规划、上会材料、制度修订、领导讲话。既服务同条线的同行，也欢迎任何想把 AI 用进公文写作的人。
+
 **不绑定特定产品**：遵循开放的 [Agent Skills 规范](https://agentskills.io)，`SKILL.md` + 脚本的结构可在 Claude Code、Claude 桌面版、WorkBuddy、CodeBuddy 等任何支持该规范的 agent 中直接使用；不支持的 agent 也可把 SKILL.md 当作操作手册直接投喂。
 
 ## Skills
