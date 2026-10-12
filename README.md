@@ -15,6 +15,7 @@
 | [relation-scope](./relation-scope/) | 人际关系智能分析：聊天记录 / 日记 / 场景重现多输入，输出情感倾向、情绪识别、关系走向、行为模式等多维报告 |
 | [grill-me-gongwen](./grill-me-gongwen/) | 方案拷问（公文规划版）：动笔前把方案建模为决策树、分轮盘问、每问必附推荐答案，事实 AI 自查、决策你拍板，收敛后才产出。基于 [Matt Pocock grill-me](https://github.com/mattpocock/skills)（MIT）改造 |
 | [minfadian](./minfadian/) | 民法典法条速查：1260 条全文按 7 编 84 章 85 个分册存储，配场景速查表、术语定位、高频判断规则三层导航；零依赖纯文本，拷即用 |
+| [hongloumeng](./hongloumeng/) | 红楼梦全本语料：程高本 120 回（简/繁）+ 脂评本 80 回（脂批约 3900 条）双版本对读，配回目/人物/诗词/脂批导航与四批可追溯校勘记录 |
 
 ## 实践笔记
 
