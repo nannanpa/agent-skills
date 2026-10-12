@@ -2,7 +2,7 @@
 
 《中华人民共和国民法典》法条速查技能：**1260 条全文按 7 编 84 章及附则共 85 个分册存储**（条文为原文），支持按编/章/条精确定位、生活工作场景检索、高频判断规则速查。
 
-> **轻量定位**：零依赖、纯文本、无 MCP——整个文件夹拷进任何支持 [Agent Skills 规范](https://agentskills.io)的 agent（Claude Code、WorkBuddy 等）即可使用；不支持的 agent 也可把 SKILL.md 当操作手册投喂。同类方案多有 MCP 依赖，本技能刻意保持"拷即用"。
+> **定位**：民法典 skill 赛道已有先行者，但多有 MCP 依赖或未附开源许可；本技能卡进轻量空档——**零依赖、MIT、整个文件夹拷进 agent skills 目录即用**（Claude Code、WorkBuddy 等支持 [Agent Skills 规范](https://agentskills.io)的均可；不支持的 agent 也可把 SKILL.md 当操作手册投喂）。条文谁都能搬，差异在三层实务导航：场景速查 / 术语定位 / 判断规则。
 
 ## 文件结构
 
