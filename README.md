@@ -1,4 +1,4 @@
-# workbuddy-skills
+# agent-skills
 
 实战中沉淀的 Agent Skills，来自真实办公场景的反复使用与打磨，而非一次性生成。
 
