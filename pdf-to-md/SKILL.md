@@ -17,7 +17,12 @@ description: 将 PDF（含扫描件 OCR 后带文字层的 PDF）提取为规整
 
 ## 管道（两步，顺序执行）
 
-依赖：Python 3.8+，`pip install pypdf`。
+依赖：Python 3.8+ 和 `pypdf`。**安装 pypdf 请装进隔离虚拟环境，不要全局安装**（避免污染系统环境）：
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install pypdf   # 或使用平台托管 venv（如已装 pypdf 则直接用）
+.venv/bin/python <本skill目录>/scripts/pdf_extract.py 输入.pdf 中间产物.md
+```
 
 ### 第 1 步：提取文本层
 
@@ -32,6 +37,13 @@ python3 <本skill目录>/scripts/pdf_extract.py 输入.pdf 中间产物.md
 ```bash
 python3 <本skill目录>/scripts/clean_md.py 中间产物.md 最终文件.md "文档标题（提取文本·规整版）"
 ```
+
+## 安装自检（装完先跑这一步）
+
+安装后确认本目录下 **三个文件齐全**：`SKILL.md`、`scripts/pdf_extract.py`、`scripts/clean_md.py`。
+
+- 若 `scripts/` 缺失（部分安装方式只抓取了 SKILL.md），先回 https://github.com/nannanpa/agent-skills 的 `pdf-to-md/scripts/` 目录补齐两个脚本，再使用；
+- 实在拿不到脚本时，可按下方"规整规则清单"自行重建（两个脚本均为纯标准库+pypdf 的无状态实现，重建成本低），但**重建后须用"效果示例"做回归**：输入规整前样例，输出应与规整后样例逐字一致。
 
 ## 效果示例
 
@@ -79,6 +91,12 @@ python3 <本skill目录>/scripts/clean_md.py 中间产物.md 最终文件.md "�
 
 多份真实公文扫描件实测——页码清零、段落完整、清单一条一行。
 
+## 已知边界
+
+- **红头文件报头区会被合并成一段**：发文机关标志、发文字号、标题、受文机关、落款、日期这些行大多不带段首模式（如`连发〔2026〕X号``大连民族大学文件`），纯文本流下会与相邻行粘连。这是设计取舍——报头词因校而异，写死规则反而误伤；需要拆分时向 `PARA` 补本校的模式即可。
+- **跨栏/双栏排版**的 PDF 提取后行序可能交错，本 skill 不做栏序还原，规整前请先目检第 1 步产物。
+- **OCR 错别字不自动改**（见"输出约定"），规整版可能残留"领城/问瓶"类错误。
+
 ## License
 
-MIT（见仓库根目录 LICENSE）
+MIT（本目录随附的 LICENSE 与仓库根目录 LICENSE 一致；单独分发本文件夹时 LICENSE 随包带走）。
