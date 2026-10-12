@@ -6,6 +6,19 @@
 
 ---
 
+## 安装与叠加（给新读者）
+
+本笔记不单独成 skill，它的用法是**叠加在上游公文写作 skill 之上**。把下面这段话直接扔给你的 agent（WorkBuddy / Codex / Claude Code 均可）即可一步完成：
+
+> 帮我装公文写作技能：先溯源安装 moxt.ai 的《公文写作 DNA》skill（GitHub 上流传的 lieflat-gongwen 的上游原版），装好后从 https://raw.githubusercontent.com/nannanpa/agent-skills/main/notes/gongwen-style-calibration.md 下载《公文写作风格校准实战笔记》（即本文），存进该技能目录，并在技能入口注明：写公文时先读这份笔记、叠加作者实测经验。
+
+说明：
+- 上游 skill 版权与许可归 moxt.ai（PolyForm Noncommercial），个人使用合规；
+- 本笔记 MIT，两者版权关系干净——skill 管风格量化，笔记管实战口径，一层管一件事；
+- 若溯源找不到 moxt.ai 的包，可直接报技能名 `lieflat-gongwen` 试装，再执行后半句叠加本笔记。
+
+---
+
 ## 一、表格化材料的四条硬经验
 
 申报书、任务书这类材料的正文装在制式表格里，直接套纯文本的量化检查会全面失真。实测四条：
