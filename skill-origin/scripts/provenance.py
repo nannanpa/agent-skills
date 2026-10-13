@@ -95,12 +95,9 @@ def fetch_repo(full_name: str):
     """GitHub API 查询仓库；返回 dict / None（不存在）/ "RATE_LIMITED"（限流）。
 
     限流必须与"仓库不存在"区分：限流时无法判定≠无背书，误判 D 档是冤案。
-    设置环境变量 GITHUB_TOKEN 可将限额从 60 次/时提到 5000 次/时。
+    无需任何密钥，匿名调用即可（限额 60 次/时，日常核验足够）。
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"}
-    token = os.environ.get("GITHUB_TOKEN", "")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(API.format(full_name), headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -169,7 +166,7 @@ def audit_skill(skill_dir: Path) -> dict:
         info = fetch_repo(repo)
         if info == "RATE_LIMITED":
             r["tier"] = "？ API受限"
-            r["verdict"] = "GitHub API 限流，本次无法判定（限流≠无背书）；稍后重跑或配 GITHUB_TOKEN 提额"
+            r["verdict"] = "GitHub API 限流，本次无法判定（限流≠无背书）；稍后重跑即可"
             return r
         if not info or "full_name" not in info:
             continue

@@ -9,7 +9,7 @@ python3 scripts/provenance.py <技能目录名>   # 核验单个
 python3 scripts/provenance.py all            # 全量体检 skills 目录
 ```
 
-纯 Python 标准库，**零依赖**；GitHub API 走 api.github.com，未认证限 60 次/时，设 `GITHUB_TOKEN` 可提到 5000 次/时。
+纯 Python 标准库，**零依赖、无需任何 API Key**，开箱即用；GitHub 公开数据走 api.github.com 匿名调用，限 60 次/时，日常核验足够。
 
 ## 判定矩阵
 
@@ -43,6 +43,7 @@ python3 scripts/provenance.py all            # 全量体检 skills 目录
 
 - **2026-10-13 SkillHub 1.0.0**：发布至 SkillHub 市场（@indiv-mabin/skill-origin）
 - **2026-10-13 SkillHub 1.0.1**：补充自定义图标与"办公效率"分类（内容无变化）
+- **2026-10-13 SkillHub 1.0.2**：移除 GITHUB_TOKEN 提额指引、声明无需任何 API Key 开箱即用（消除市场"需 API Key"误标）
 - **2026-10-13 SkillHub 1.0.1**：补充自定义图标与"办公效率"分类（内容无变化）
 - **2026-10-13 SkillHub 1.0.0**：发布至 SkillHub 市场（@indiv-mabin/skill-origin）
 - **2026-10-12 首发**：四级判定矩阵 + provenance.py（纯标准库零依赖）+ 厂商官方档/OFFICIAL_ORGS 白名单（含一次"命名之争"：provenance 留括号，origin 占名位）
