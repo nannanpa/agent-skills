@@ -5,7 +5,7 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 
 # docx-track-changes-wps
 
-用 python-docx 加 `lxml` 直接操作 XML，向 Word `.docx` 写入真正的"WPS 安全"修订（tracked changes）。专为**中文公文场景**设计：修改意见报送（如报送"两个工作要点"修改意见）、在发文稿上以"修订模式"标注修改/新增。
+用 python-docx 加 `lxml` 直接操作 XML，向 Word `.docx` 写入真正的"WPS 安全"修订（tracked changes）。专为**中文公文场景**设计：修改意见报送（如报送规划、要点类文件的修改意见）、在发文稿上以"修订模式"标注修改/新增。
 
 ## 适用场景
 
