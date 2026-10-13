@@ -1,52 +1,52 @@
 ---
 name: docx-track-changes-wps
-description: This skill should be used when inserting tracked changes (修订模式 / redline revisions) into a .docx document with python-docx + lxml, especially for Chinese official documents that must open cleanly in WPS without the "rainbow spinner / 无响应" hang. Covers enabling trackChanges, placing w:ins insertions, avoiding the WPS infinite-loop pitfalls, and verifying the result.
+description: 向 .docx 文档插入真正的"修订模式"（tracked changes / redline）时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订。
 ---
 
 # docx-track-changes-wps
 
-Insert real, WPS-safe tracked changes into a Word `.docx` using python-docx plus direct `lxml` manipulation. Designed for Chinese official-document redline workflows (e.g. 报送"两个工作要点"修改意见、在发文稿上以"修订模式"标注修改/新增).
+用 python-docx 加 `lxml` 直接操作 XML，向 Word `.docx` 写入真正的"WPS 安全"修订（tracked changes）。专为**中文公文场景**设计：修改意见报送（如报送"两个工作要点"修改意见）、在发文稿上以"修订模式"标注修改/新增。
 
-## When to use
+## 适用场景
 
-- A user asks to "另存一份原文稿 / 打开修订模式 / 以修订模式把修改意见修订进去" on a `.docx`.
-- The output must open in **WPS** (common in Chinese government / university environments) without hanging on a rainbow spinner.
-- Revisions are "修改完善"(revise) or "新增"(add) — i.e. mostly insertions against an existing paragraph.
+- 用户要求"另存一份原文稿 / 打开修订模式 / 以修订模式把修改意见修订进去"一个 `.docx`；
+- 成品必须在 **WPS** 中打开（政府/高校环境最常见），不能卡在彩虹圈无响应；
+- 修订类型是"修改完善"或"新增"——即主要是在既有段落上做**插入**。
 
-## Golden rule: prefer `w:ins` over `w:del`
+## 黄金法则：优先 `w:ins`，避免 `w:del`
 
-For Chinese redline workflows the safest pattern is **insertion-only**: keep the original run text and insert the new text as a `w:ins` element right after the anchor run. Avoid `w:del` (deletions) wherever possible — `w:del` with `w:delText` and `w:rPrChange` is the single most common trigger of the WPS rainbow-loop hang. If a "replacement" is really "append a suffix", model it as an insertion after the original phrase, not as delete+insert.
+中文公文修订场景最安全的模式是**只插入**：保留原文 run，把新增文字作为 `w:ins` 元素紧插在锚点 run 之后。尽量不用 `w:del`（删除）——`w:del` + `w:delText` + `w:rPrChange` 是 WPS 彩虹圈卡死的第一大诱因。如果"修改"实际是"在原句后补一句"，就建模为在原句后插入，而不是删除+插入。
 
-## WPS rainbow-loop avoidance checklist (mandatory)
+## WPS 彩虹圈规避清单（必查）
 
-1. **Unique `w:id`** across the whole document (use a global counter, start high like 10001 to avoid clashing with any existing ids).
-2. **Valid `w:date`** in ISO 8601 form, e.g. `2026-07-23T09:00:00Z`.
-3. **`w:author`** present on every `w:ins`.
-4. **Enable track changes properly**: in `word/settings.xml` add `<w:trackChanges w:val="true"/>` AND add `<w:rsidRoot w:val="..."/>` (reuse the existing `w:rsidRDefault` value if present, else a fixed 8-hex value). Missing `rsidRoot` while runs carry `w:rsidR` is a known WPS hang trigger.
-5. **Inserted `w:r` carries NO `w:rPr`** (plain `<w:r><w:t>...</w:t></w:r>` inside the `w:ins`). An `rPr` that references a font/style not present can make WPS loop.
-6. **Never touch the body-level `w:sectPr`** (it is a direct child of `w:body`, not inside the last paragraph) and never wrap the final section-break paragraph in `w:ins`/`w:del`.
-7. Keep `w:t` text with `xml:space="preserve"` so leading/trailing spaces survive.
+1. **`w:id` 全文唯一**（用全局计数器，从 10001 这类高位起号，避免与文档既有 id 冲突）。
+2. **`w:date` 合法**，ISO 8601 格式，如 `2026-07-23T09:00:00Z`。
+3. 每个 `w:ins` 上都要有 **`w:author`**。
+4. **正确启用修订**：`word/settings.xml` 里加 `<w:trackChanges w:val="true"/>`，同时加 `<w:rsidRoot w:val="..."/>`（有现成 `w:rsidRDefault` 值就复用，没有就用固定 8 位十六进制）。run 带 `w:rsidR` 而缺 `rsidRoot` 是已知的 WPS 卡死诱因。
+5. **插入的 `w:r` 不带 `w:rPr`**（`w:ins` 里就是纯 `<w:r><w:t>...</w:t></w:r>`）。rPr 引用了文档里不存在的字体/样式可能让 WPS 死循环。
+6. **绝不碰 body 级 `w:sectPr`**（它是 `w:body` 的直接子元素，不在最后一段里面），也不把末尾分节符段落包进 `w:ins`/`w:del`。
+7. `w:t` 文本保留 `xml:space="preserve"`，保证首尾空格不丢。
 
-## Procedure
+## 操作步骤
 
-1. Copy the original `.docx` to a new filename first (keep the source pristine).
-2. Open with python-docx; enable `trackChanges` + `rsidRoot` in `doc.settings.element`.
-3. For each revision, locate the target paragraph and the anchor **run** that contains the boundary phrase. All runs in these docs typically have `style=None` (inherited paragraph font) — safe to copy or omit `rPr`.
-4. Insert the new text as a `w:ins` element placed as a sibling right after the anchor run. If the boundary phrase ends mid-run, split the run at the offset (copy `rPr` to the new suffix run, set the original run's text to the prefix), then insert the `w:ins` between prefix and suffix.
-5. `doc.save(...)` and verify (see below).
+1. 先把原 `.docx` 复制为新文件名再改（保持原件不动）。
+2. 用 python-docx 打开，在 `doc.settings.element` 里启用 `trackChanges` + 补 `rsidRoot`。
+3. 对每条修订：定位目标段落和包含边界短语的锚点 **run**。这类文档里所有 run 通常 `style=None`（继承段落字体）——可安全复制或省略 `rPr`。
+4. 把新增文字作为 `w:ins` 元素，作为兄弟节点紧插在锚点 run 之后。如果边界短语在 run 中间结束，先在该偏移处拆分 run（把 `rPr` 复制给新的后缀 run，原 run 文本设为前缀），再把 `w:ins` 插在前缀和后缀之间。
+5. `doc.save(...)` 后校验（见下）。
 
-## Known pitfalls
+## 已知坑
 
-- **Hidden characters in anchor phrases.** Chinese documents frequently embed `》（U+300B）`, ``（U+300C）`, `—（U+2014）` etc. inside what looks like plain text (e.g. `《…（2025—2027年）》` ends with `年）》。`). A literal anchor like `"年），"` will NOT match because of the hidden `》`. **Construct tricky anchors with explicit Unicode escapes** (`"年"+"\uFF09"+"\u300B"+"\uFF0C"`) and/or print `repr()` of the candidate run to confirm exact characters before matching.
-- **python-docx `paragraph.text` omits `w:ins` content.** After editing, `paragraph.text` will NOT show inserted text (it only concatenates direct `w:r` children, not runs inside `w:ins`). To verify placement, parse `word/document.xml` and concatenate all descendant `w:t` (including those under `w:ins`/`w:del`).
-- **Run boundaries**: a phrase often spans multiple runs (e.g. `"一院一策"` split as `一院`+`策`). Anchor on the run that *starts* with the phrase tail, or split at the run boundary, rather than assuming one run.
+- **锚点短语里藏隐藏字符。** 中文文档常在看似纯文本的地方嵌着 `》（U+300B）`、`「（U+300C）`、`—（U+2014）` 等（如 `《…（2025—2027年）》` 实际以 `年）》。` 结尾）。直接写锚点 `"年），"` 会匹配失败，因为中间藏着 `》`。**构造复杂锚点时用显式 Unicode 转义**（`"年"+"\uFF09"+"\u300B"+"\uFF0C"`），并且/或者先打印候选 run 的 `repr()` 确认精确字符再匹配。
+- **python-docx 的 `paragraph.text` 不含 `w:ins` 内容。** 插入后 `paragraph.text` 不会显示新插入的文字（它只拼接直接的 `w:r` 子节点，不含 `w:ins` 里的 run）。要核验插入位置，需解析 `word/document.xml` 并拼接所有后代 `w:t`（含 `w:ins`/`w:del` 之下的）。
+- **run 边界**：一个短语常横跨多个 run（如 `"一院一策"` 被拆成 `一院`+`策`）。要锚定在以短语尾部**开头**的 run，或在 run 边界处拆分，不要假设短语在单个 run 里。
 
-## Verification (always run after save)
+## 保存后必做校验
 
-- `zipfile.ZipFile(path).testzip()` is `None` (archive intact).
-- `etree.fromstring(z.read('word/document.xml'))` parses (well-formed).
-- `trackChanges` value is `true`; `rsidRoot` present.
-- Count `w:ins` == expected, `w:del` == 0 (if insertion-only), `w:id` set is unique, each `w:ins` has author+date+inner `w:r`.
-- For each target paragraph, full-text (incl. `w:ins`) contains the inserted keywords.
+- `zipfile.ZipFile(path).testzip()` 返回 `None`（压缩包完好）；
+- `etree.fromstring(z.read('word/document.xml'))` 可解析（XML 合法）；
+- `trackChanges` 为 `true`；`rsidRoot` 存在；
+- `w:ins` 数量符合预期、`w:del` 为 0（只插入模式下）、`w:id` 集合唯一、每个 `w:ins` 都有 author+date+内部 `w:r`；
+- 逐个目标段落检查全文（含 `w:ins`）包含插入的关键词。
 
-See `scripts/apply_track_changes.py` for a ready-to-use, WPS-safe implementation with an `apply(paragraph_index, anchor_phrase, insert_text)` helper.
+现成的 WPS 安全实现见 `scripts/apply_track_changes.py`，提供 `apply(paragraph_index, anchor_phrase, insert_text)` 辅助函数。
