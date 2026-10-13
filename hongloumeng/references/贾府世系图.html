@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贾府世系图 · 红楼梦客制技能</title>
+<style>
+:root{--ink:#2b2622;--paper:#f7f3ea;--card:#fffdf8;--red:#9e2b25;--line:#e0d6c2;--muted:#8a8177;
+--c-shi:#7b5ea7;--c-wang:#2e6f8e;--c-xue:#a4702e;--c-lin:#4a7c59;--c-li:#8c6d46}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Serif SC","Songti SC","STSong","SimSun",serif;background:var(--paper);color:var(--ink);font-size:15px}
+header{background:linear-gradient(160deg,#7a1f1a,#9e2b25);color:#f7ecd9;padding:34px 20px 26px;text-align:center}
+header h1{font-size:26px;letter-spacing:4px}
+header p{font-size:13.5px;opacity:.9;margin-top:6px}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+.canvas{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:auto}
+#stage{position:relative;height:560px;min-width:980px}
+.node{position:absolute;width:132px;transform:translateX(-50%);background:#fbf7ee;border:1.5px solid var(--red);
+border-radius:9px;padding:6px 8px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(90,60,30,.10);transition:.15s}
+.node:hover{background:#fdeee8;border-color:#7a1f1a}
+.node.gen0{background:#7a1f1a;color:#f7ecd9;border-color:#7a1f1a}
+.node.male{border-color:var(--red)}
+.node .nm{font-weight:700;font-size:16px;letter-spacing:1px}
+.node .sp{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4}
+.node.gen0 .sp{color:#f2d9a4}
+.node .tg{font-size:11px;color:var(--muted);margin-top:2px}
+.node.gen0 .tg{color:#e8cf9e}
+svg.links{position:absolute;left:0;top:0;pointer-events:none}
+.marry{stroke-dasharray:5 4}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 4px;font-size:13px;align-items:center}
+.legend .k{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.panel{margin-top:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:0 10px 10px 0;padding:14px 20px;min-height:74px}
+.panel h3{font-size:17px;color:var(--red-deep,#7a1f1a);margin-bottom:4px}
+.panel .meta{font-size:13px;color:var(--muted);margin-bottom:6px}
+.panel p{font-size:14.5px}
+.chips{margin-top:16px}
+.chips h3{font-size:15.5px;color:#7a1f1a;margin:10px 0 6px;letter-spacing:1px}
+.chipset{display:flex;flex-wrap:wrap;gap:7px}
+.chip{background:#fff;border:1px solid var(--line);border-radius:14px;padding:2px 12px;font-size:13px;color:#57504a}
+.chip b{color:#7a1f1a;font-weight:700}
+footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:26px;line-height:1.9}
+</style></head><body>
+<header><h1>贾府世系图</h1><p>宁荣二府五代世系 · 四大家族联姻 · 主仆名分 —— 点人物卡看详情</p></header>
+<div class="wrap">
+<div class="legend">
+ <span class="k"><i style="background:var(--c-shi)"></i>史家姻亲</span>
+ <span class="k"><i style="background:var(--c-wang)"></i>王家姻亲</span>
+ <span class="k"><i style="background:var(--c-xue)"></i>薛家姻亲</span>
+ <span class="k"><i style="background:var(--c-lin)"></i>林家姻亲</span>
+ <span style="color:var(--muted)">｜ 虚线 = 婚嫁入府</span>
+</div>
+<div class="canvas"><div id="stage"><svg class="links" id="sv"></svg></div></div>
+<div class="panel" id="panel"><h3>点击任一人物卡</h3><p>显示其身份、关键回数与一句话注（数据同 references/人物索引.md）。</p></div>
+<div class="chips">
+ <h3>主要房舍丫鬟仆役（速记）</h3>
+ <div class="chipset">
+  <span class="chip"><b>怡红院（宝玉）</b>：袭人·晴雯·麝月·秋纹·碧痕·绮霰·檀云·芳官·四儿·坠儿·春燕｜小厮：茗烟(焙茗)·锄药·扫红·墨雨·李贵｜乳母：李嬷嬷</span>
+  <span class="chip"><b>潇湘馆（黛玉）</b>：紫鹃·雪雁·春纤</span>
+  <span class="chip"><b>蘅芜苑（宝钗）</b>：莺儿·文杏</span>
+  <span class="chip"><b>贾母房</b>：鸳鸯·琥珀·翡翠·玻璃·傻大姐</span>
+  <span class="chip"><b>凤姐房</b>：平儿·丰儿·小红·莲花儿｜小厮：彩明·旺儿·兴儿·隆儿·昭儿</span>
+  <span class="chip"><b>迎春</b>：司棋·绣桔</span>
+  <span class="chip"><b>探春</b>：侍书·翠墨·艾官</span>
+  <span class="chip"><b>惜春</b>：入画</span>
+  <span class="chip"><b>李纨</b>：素云·碧月</span>
+  <span class="chip"><b>王夫人</b>：金钏·玉钏·彩云·彩霞｜陪房：周瑞夫妇</span>
+  <span class="chip"><b>府务</b>：赖大·林之孝夫妇·乌进孝(庄)·焦大(宁)·鲍二·多浑虫夫妇·清客：詹光·单聘仁·程日兴</span>
+ </div>
+</div>
+<footer>数据经语料回验 · 详见 references/人物索引.md 与 人物关系.json · 红楼梦客制检索技能 · 2026-10</footer>
+</div>
+<script>
+const DATA = {"roots": [{"name": "贾演", "tag": "宁国公", "info": "宁府开基一代", "children": [{"name": "贾代化", "tag": "京营节度使", "info": "宁府二代", "children": [{"name": "贾敬", "tag": "进士·好道", "info": "弃家炼丹于玄真观，63 回服丹丧（其兄贾敷幼夭）", "children": [{"name": "贾珍", "spouse": "尤氏（继室）", "tag": "三品威烈将军·宁府当家人", "info": "宁府首恶；居丧聚赌", "children": [{"name": "贾蓉", "spouse": "秦可卿（亡）→许氏（续）", "tag": "五品龙禁尉（捐）", "info": "妻可卿 13 回亡；毒设相思局传话人"}, {"name": "贾蔷", "tag": "宁府正派玄孙·珍所养", "info": "置办十二女伶；与龄官"}]}]}]}]}, {"name": "贾源", "tag": "荣国公", "info": "荣府开基一代", "children": [{"name": "贾代善", "spouse": "贾母（史太君）", "tag": "荣府二代", "info": "娶金陵世勋史侯家小姐", "children": [{"name": "贾赦", "spouse": "邢夫人（填房）", "tag": "一等将军", "info": "强娶鸳鸯不成、卖迎春", "children": [{"name": "贾琏", "spouse": "王熙凤", "tag": "同知（捐）·外务当家", "info": "偷娶尤二姐；多姑娘鲍二家案", "children": [{"name": "巧姐", "tag": "", "info": "刘姥姥所救，嫁村野人家（判词）"}]}, {"name": "迎春", "spouse": "孙绍祖", "tag": "·贾赦妾出", "info": "\"中山狼\"，一载赴黄粱"}, {"name": "贾琮", "tag": "幼子", "info": "庭前奉灯"}]}, {"name": "贾政", "spouse": "王夫人", "tag": "工部员外郎", "info": "端方迂执；妾赵姨娘、周姨娘", "children": [{"name": "贾珠", "spouse": "李纨", "tag": "早逝", "info": "不到二十岁病亡", "children": [{"name": "贾兰", "tag": "", "info": "续书中举，兰桂齐芳"}]}, {"name": "贾元春", "tag": "贤德妃", "info": "16 回省亲；虎兕相逢大梦归"}, {"name": "贾宝玉", "spouse": "薛宝钗（婚后出家）", "tag": "衔玉而生", "info": "前身神瑛侍者；怡红公子"}, {"name": "贾探春", "tag": "赵姨娘出", "info": "敏探春兴利除弊；远嫁海隅"}, {"name": "贾环", "tag": "赵姨娘出", "info": "猥琐阴微"}]}, {"name": "贾敏", "spouse": "林如海", "tag": "贾母独女", "info": "早逝；其女黛玉入贾府", "children": [{"name": "林黛玉", "tag": "绛珠仙草转世", "info": "寄居荣府；泪尽而逝"}]}]}]}], "info": {"贾宝玉": {"role": "荣国府政子，衔玉而生", "chs": "1-120", "note": "前身神瑛侍者；诸艳之冠，终出家", "aka": "怡红公子／绛洞花主／富贵闲人／混世魔王"}, "林黛玉": {"role": "姑苏林如海之女，宝玉姑表妹", "chs": "1-120", "note": "前身绛珠仙草，还泪而来；诗魂，泪尽而逝（续书焚稿）", "aka": "颦儿／颦颦／潇湘妃子"}, "薛宝钗": {"role": "薛姨妈女", "chs": "1-120", "note": "见核心", "aka": "蘅芜君"}, "王熙凤": {"role": "贾琏妻，王夫人内侄女", "chs": "1-120", "note": "协理宁国府、弄权铁槛寺；判词\"一从二令三人木\"", "aka": "凤姐／凤辣子／琏二奶奶"}, "贾母": {"role": "荣国公代善之妻，两府最高长辈", "chs": "1-120", "note": "福寿全归（续书 110 回丧仪后家败）", "aka": "史太君／老祖宗"}, "贾政": {"role": "荣国府次子，工部员外郎", "chs": "1-120", "note": "端方迂执；结局外任罢官（续书）", "aka": "——"}, "王夫人": {"role": "贾政妻，王子腾之妹", "chs": "1-120", "note": "抄检大观园逐晴雯、金钏之死主责", "aka": "——"}, "贾琏": {"role": "贾赦子，捐同知，外务当家", "chs": "1-120", "note": "多姑娘、鲍二家、偷娶尤二姐诸案", "aka": "琏二爷"}, "李纨": {"role": "贾珠遗孀，贾兰母", "chs": "1-120", "note": "守节课子，\"戴珠冠，披凤袄\"", "aka": "稻香老农／大菩萨"}, "贾元春": {"role": "贾政长女，贤德妃", "chs": "1-120", "note": "16 回省亲；判词\"虎兕相逢大梦归\"", "aka": "元妃"}, "贾探春": {"role": "赵姨娘所生，宝玉同父异母妹", "chs": "1-120", "note": "理家兴利除弊（55-56 回）；远嫁海隅", "aka": "玫瑰花／蕉下客"}, "史湘云": {"role": "史侯家侄孙女，贾母娘家亲", "chs": "1-120", "note": "英豪阔大宽宏量；\"白首双星\"伏婚姻成谜", "aka": "枕霞旧友／云丫头"}, "贾迎春": {"role": "贾赦之女", "chs": "1-120", "note": "误嫁孙绍祖\"中山狼\"，一载赴黄粱", "aka": "二木头"}, "贾惜春": {"role": "宁府贾敬之女", "chs": "1-120", "note": "善画；勘破三春，出家为尼", "aka": "藕榭"}, "妙玉": {"role": "栊翠庵尼，苏州人，仕宦之家女", "chs": "17-18/41/76/87/112", "note": "\"欲洁何曾洁\"；续书遭劫", "aka": "——"}, "巧姐": {"role": "贾琏凤姐之女", "chs": "1-120", "note": "刘姥姥救之；判词\"巧得遇恩人\"", "aka": "大姐儿"}, "秦可卿": {"role": "贾蓉妻，秦业养女", "chs": "5/7-13", "note": "早逝；脂批原稿\"淫丧天香楼\"被删", "aka": "兼美（幻境）"}, "贾珍": {"role": "宁府当家人，三品威烈将军", "chs": "1-120", "note": "居丧聚赌（75 回）；宁府首恶", "aka": "——"}, "贾蓉": {"role": "贾珍子，捐五品龙禁尉", "chs": "1-120", "note": "凤姐\"毒设相思局\"借他传话；妻可卿亡后续娶许氏", "aka": "——"}, "尤氏": {"role": "贾珍继室", "chs": "1-120", "note": "宁府女主人，懦而能忍", "aka": "——"}, "薛姨妈": {"role": "王家女，薛家当家奶奶", "chs": "1-120", "note": "宝钗蟠之母，慈而纵子", "aka": "——"}, "薛蟠": {"role": "见核心", "chs": "——", "note": "见核心", "aka": "——"}, "香菱": {"role": "甄士隐之女，薛蟠之妾", "chs": "1/4/48-80/103/120", "note": "副册唯一；学诗（48 回）；夏金桂改名秋菱，续书扶正后难产", "aka": "甄英莲／莲卿／秋菱"}, "袭人": {"role": "宝玉首席大丫鬟", "chs": "1-120", "note": "\"贤袭卿娇嗔箴宝玉\"；判词\"堪羡优伶有福\"——终嫁蒋玉菡", "aka": "花袭人／珍珠（原名）／花气袭人"}, "晴雯": {"role": "宝玉丫鬟，赖大家买来献贾母", "chs": "5-77", "note": "\"心比天高，身为下贱\"；抄检后被逐夭亡，78 回《芙蓉女儿诔》", "aka": "——"}, "平儿": {"role": "凤姐陪嫁四大丫鬟之一兼贾琏妾", "chs": "1-120", "note": "\"俏平儿\"判冤决狱（61 回）、软语救贾琏（21 回）", "aka": "平姑娘"}, "鸳鸯": {"role": "贾母大丫鬟", "chs": "1-120", "note": "抗婚拒嫁贾赦（46 回）；80 回后殉贾母（续书）", "aka": "金鸳鸯"}, "紫鹃": {"role": "黛玉大丫鬟", "chs": "1-120", "note": "\"慧紫鹃情辞试忙玉\"（57 回）", "aka": "鹦哥（原名，贾母拨与黛玉）"}, "莺儿": {"role": "宝钗丫鬟", "chs": "1-120", "note": "打络子（35 回）；\"黄金莺巧结梅花络\"", "aka": "黄金莺"}, "麝月": {"role": "宝玉丫鬟", "chs": "5-120", "note": "\"开到荼蘼花事了\"——留侍宝玉者", "aka": "——"}, "刘姥姥": {"role": "王狗儿岳母，王家连宗远亲", "chs": "6/39-42/113/119", "note": "三进荣国府；终救巧姐", "aka": "——"}, "贾雨村": {"role": "湖州（胡州）人，中进士后官至大司马", "chs": "1-120", "note": "葫芦案徇情；后攀附，脂批示其落井下石", "aka": "贾化／时飞／雨村"}, "甄士隐": {"role": "姑苏乡宦，英莲之父", "chs": "1/103/120", "note": "《好了歌》注解者；太虚幻境引线人", "aka": "——"}, "薛宝琴": {"role": "见核心", "chs": "——", "note": "见核心", "aka": "——"}, "邢岫烟": {"role": "邢夫人侄女，家贫", "chs": "49-120", "note": "典衣（57 回）；与薛蝌订婚", "aka": "——"}, "薛蝌": {"role": "见核心", "chs": "——", "note": "见核心", "aka": "——"}, "尤二姐": {"role": "尤氏继母带来之女，贾琏偷娶", "chs": "63-69", "note": "吞金自逝；凤姐\"借剑杀人\"", "aka": "——"}, "尤三姐": {"role": "尤二姐之妹", "chs": "63-66", "note": "鸳鸯剑；慕柳湘莲，被疑自刎", "aka": "——"}, "柳湘莲": {"role": "世家子弟，串戏游侠", "chs": "47/66", "note": "痛打薛蟠；尤三姐死后随道出家", "aka": "冷二郎"}, "贾芸": {"role": "西廊下五嫂子之子，草字辈", "chs": "24+", "note": "与小红、醉金刚倪二等市井线枢纽", "aka": "——"}, "小红": {"role": "林之孝之女，先在怡红院后投凤姐", "chs": "24-27", "note": "\"痴女儿遗帕惹相思\"，与贾芸终成", "aka": "林红玉"}, "秦钟": {"role": "秦业之子，可卿之弟", "chs": "7-16", "note": "与智能儿私情，父亡后夭逝", "aka": "鲸卿"}, "蒋玉菡": {"role": "忠顺王府戏班小旦", "chs": "28/33/120", "note": "茜香罗汗巾；终娶袭人", "aka": "琪官"}, "冯紫英": {"role": "神武将军冯唐之子", "chs": "10/26/28", "note": "铁网山打围受伤；家宴作「女儿」曲", "aka": "——"}, "芳官": {"role": "正旦（或言正生? 正旦）", "chs": "——", "note": "见核心", "aka": "——"}, "龄官": {"role": "小旦", "chs": "——", "note": "见核心", "aka": "——"}, "夏金桂": {"role": "见核心", "chs": "——", "note": "见核心", "aka": "——"}, "贾演": {"role": "宁府开基一代", "chs": "——", "note": "开国之勋", "aka": "宁国公"}, "贾代化": {"role": "宁府二代，京营节度使", "chs": "——", "note": "演之子", "aka": "——"}, "贾敷": {"role": "代化长子", "chs": "——", "note": "八九岁上便死了", "aka": "——"}, "贾敬": {"role": "代化次子，进士出身", "chs": "——", "note": "一味好道，只爱烧丹炼汞，住城外玄真观；63 回服丹丧", "aka": "——"}, "瑞珠": {"role": "可卿之婢", "chs": "13", "note": "可卿亡后触柱而亡", "aka": "——"}, "宝珠": {"role": "可卿之婢", "chs": "13-14", "note": "甘为义女，送灵铁槛寺不回", "aka": "——"}, "许氏": {"role": "贾蓉续弦", "chs": "——", "note": "通行整理本多补名为许氏", "aka": "贾蓉之妻（程本原文写法）"}, "贾源": {"role": "荣府开基一代", "chs": "——", "note": "与贾演同胞兄弟", "aka": "荣国公"}, "贾代善": {"role": "荣府二代", "chs": "——", "note": "娶史侯家小姐即贾母", "aka": "——"}, "贾敏": {"role": "贾母独女，如海妻", "chs": "2", "note": "早逝，黛玉之母", "aka": "——"}, "贾珠": {"role": "贾政长子", "chs": "2/33", "note": "早逝（不到二十岁娶妻病亡）", "aka": "——"}, "贾兰": {"role": "贾珠李纨之子", "chs": "1-120", "note": "幼习射骑；续书 中举\"兰桂齐芳\"", "aka": "——"}, "贾琮": {"role": "贾赦幼子", "chs": "24/53+", "note": "年幼，庭前奉灯", "aka": "——"}, "贾赦": {"role": "荣府长房，袭一等将军", "chs": "1-120", "note": "强索鸳鸯、卖迎春；石呆子案帮凶", "aka": "——"}, "邢夫人": {"role": "贾赦填房妻", "chs": "1-120", "note": "吝啬偏心；为婆婆难凤姐（71 回）", "aka": "——"}, "贾环": {"role": "贾政三子，赵姨娘出", "chs": "1-120", "note": "推蜡灯烫宝玉（25 回）；续书卖巧姐主谋之一", "aka": "——"}, "孙绍祖": {"role": "大同府人，指挥之裔，袭职", "chs": "79-80/109", "note": "迎春夫，虐待成疾", "aka": "中山狼"}, "赵姨娘": {"role": "贾政之妾，家生子", "chs": "1-120", "note": "魇魔法案（25 回）主谋之一；续书中暴毙", "aka": "——"}, "周姨娘": {"role": "贾政之妾", "chs": "——", "note": "无出，安分守己", "aka": "——"}, "贾代儒": {"role": "贾府族学塾师", "chs": "9/12", "note": "贾瑞祖父", "aka": "——"}, "贾瑞": {"role": "代儒之孙", "chs": "9/11-12", "note": "凤姐毒设相思局，照风月宝鉴而亡", "aka": "天祥（字）"}, "贾芹": {"role": "草字辈远族，周氏之子", "chs": "23/53/93", "note": "管家庙铁槛寺、水月庵；庵内生事", "aka": "——"}, "贾蔷": {"role": "宁府正派玄孙，珍所养", "chs": "9/16-36", "note": "下姑苏置办十二女伶；与龄官", "aka": "——"}, "贾璜": {"role": "远族，金氏（璜大奶奶）之夫", "chs": "9-10", "note": "家道小康", "aka": "——"}, "贾菌": {"role": "娄氏之孙，学童", "chs": "9", "note": "掷书砚助拳之顽童，后成豪杰（脂批）", "aka": "——"}, "贾敕、贾效、贾敦": {"role": "族人，祭宗祠名单", "chs": "53", "note": "随祭一行", "aka": "——"}, "贾衍、贾珖、贾琛、贾琼、贾璘": {"role": "族人", "chs": "53/63", "note": "拜寿名单（63 回含贾㻞）", "aka": "——"}, "贾㻞、贾珩": {"role": "族人，玉字辈", "chs": "63", "note": "拜寿名单（原缺字处经校补）", "aka": "——"}, "史鼐": {"role": "湘云叔", "chs": "4/49", "note": "护官符\"保龄侯尚书令史公之后\"", "aka": "保龄侯"}, "史鼎": {"role": "湘云叔（或兄）", "chs": "13/49", "note": "王子腾升迁同日拜官", "aka": "忠靖侯"}, "史湘云婶母": {"role": "湘云抚养人", "chs": "32/36+", "note": "命湘云做活至三更（32 回宝钗语）", "aka": "——"}, "王子腾": {"role": "王夫人凤姐之兄", "chs": "1-96", "note": "京营节度使→九省统制→相府；续书途中暴毙", "aka": "——"}, "王子胜": {"role": "王家兄弟", "chs": "——", "note": "家事不问", "aka": "——"}, "王仁": {"role": "凤姐之兄", "chs": "49/113+", "note": "续书卖巧姐主谋之一", "aka": "——"}, "王成": {"role": "凤姐祖上连宗之亲（已故）", "chs": "6", "note": "其子狗儿", "aka": "——"}, "狗儿": {"role": "王成子", "chs": "6/113", "note": "务农京郊", "aka": "王狗儿"}, "板儿": {"role": "狗儿刘氏之子", "chs": "6/40-41/113", "note": "与巧姐交换柚子佛手——伏姻缘", "aka": "——"}, "青儿": {"role": "狗儿刘氏之女", "chs": "113", "note": "板儿之妹", "aka": "——"}, "夏婆（夏奶奶）": {"role": "夏金桂母，夏家寡母", "chs": "79+", "note": "娇纵独女", "aka": "——"}, "宝蟾": {"role": "金桂丫鬟，后为蟠妾", "chs": "79-83+", "note": "与金桂主仆相制", "aka": "——"}, "同喜、同贵": {"role": "薛姨妈丫鬟", "chs": "——", "note": "陪房", "aka": "——"}, "张德辉": {"role": "薛家老伙计，岁末采买", "chs": "48", "note": "劝蟠外出学买卖", "aka": "——"}, "林如海": {"role": "前科探花，钦点巡盐御史", "chs": "1-3/12-14", "note": "黛玉父；荐雨村复职", "aka": "林如海（兰台寺大夫）"}, "甄英莲": {"role": "即香菱，士隐独女", "chs": "1-4", "note": "元宵丢失（霍启抱看灯）", "aka": "——"}, "封氏": {"role": "士隐之妻", "chs": "1/4/103/120", "note": "封肃之女", "aka": "——"}, "封肃": {"role": "士隐岳丈，大如州人", "chs": "1/4", "note": "势利，半哄半赚士隐银两", "aka": "——"}, "娇杏": {"role": "甄家丫鬟→雨村二房→正室", "chs": "1-4", "note": "\"偶因一着错，便为人上人\"（谐音\"侥幸\"）", "aka": "——"}, "霍启": {"role": "士隐家人", "chs": "1", "note": "抱英莲看灯丢失，谐音\"祸起\"", "aka": "——"}, "甄应嘉": {"role": "钦差金陵省体仁院总裁，甄宝玉父", "chs": "2/74-75", "note": "与贾府是老亲世交；后获罪抄家", "aka": "——"}, "甄宝玉": {"role": "江南甄家公子", "chs": "2/56/93/115", "note": "与宝玉同名同貌；续书\"改邪归正\"谈禄蠹", "aka": "——"}, "包勇": {"role": "见甄家", "chs": "——", "note": "见甄家", "aka": "——"}, "戴权": {"role": "大明宫掌宫内相（太监）", "chs": "13", "note": "卖官：蓉之龙禁尉三千二百两", "aka": "——"}, "夏守忠": {"role": "六宫都太监", "chs": "16/72/83", "note": "传旨宣召元春", "aka": "——"}, "周太监": {"role": "太监", "chs": "72", "note": "开口索借一千两", "aka": "——"}, "北静王水溶": {"role": "年未弱冠，贤王", "chs": "14-16/43/45/71/85", "note": "路祭赠鹡鸰香念珠与宝玉", "aka": "北静王"}, "忠顺王": {"role": "亲王", "chs": "33", "note": "遣长史官索琪官（蒋玉菡）", "aka": "——"}, "门子（葫芦僧）": {"role": "应天府门子，原葫芦庙沙弥", "chs": "4", "note": "献护官符；被雨村寻隙远遣", "aka": "——"}, "冯渊": {"role": "小乡宦之子", "chs": "4", "note": "为争英莲被薛蟠纵仆打死，\"逢冤\"", "aka": "——"}, "云光": {"role": "长安节度使", "chs": "10/15-16", "note": "受凤姐请托拆张金哥姻缘", "aka": "节度使"}, "金哥": {"role": "长安府善才庵施主之女", "chs": "15-16", "note": "被逼退婚，自缢；守备之子投河", "aka": "张金哥（通行称）"}, "守备之子": {"role": "张金哥原聘", "chs": "15-16", "note": "投河殉情", "aka": "——"}, "李衙内": {"role": "长安府太爷小舅子", "chs": "15", "note": "倚势强求张金哥", "aka": "——"}, "石呆子": {"role": "破落收藏家", "chs": "48", "note": "二十把旧扇被雨村构陷抄夺；下落脂批有\"不知生死\"之叹", "aka": "——"}, "傅试": {"role": "通判，趋附贾府", "chs": "35", "note": "其妹秋芳欲攀宝玉", "aka": "——"}, "傅秋芳": {"role": "傅试之妹，琼闺秀玉", "chs": "35", "note": "二十三岁待字，宝玉闻名神往", "aka": "——"}, "周琼": {"role": "贾政门生，外任海疆", "chs": "99/117", "note": "议亲于贾政（探春远嫁线索之一）", "aka": "——"}, "平安州节度使": {"role": "贾琏常为之跑差", "chs": "66/93", "note": "私相授受事发为抄家罪状之一", "aka": "——"}, "詹光": {"role": "贾政清客", "chs": "——", "note": "下棋作画陪衬", "aka": "沾光"}, "单聘仁": {"role": "贾政清客", "chs": "——", "note": "与詹光同行", "aka": "善骗人"}, "程日兴": {"role": "清客，古董商人", "chs": "16/42", "note": "与宝钗论画具（42 回代拟）", "aka": "——"}, "卜固修": {"role": "清客", "chs": "——", "note": "随薛蟠南下", "aka": "不顾羞"}, "吴新登": {"role": "银库房总领", "chs": "——", "note": "库房总领，暗弊丛生", "aka": "无星戥"}, "戴良": {"role": "仓上头目", "chs": "——", "note": "谐音\"大量\"", "aka": "大量"}, "钱华": {"role": "买办", "chs": "8", "note": "称宝钗\"好个千金小姐\"", "aka": "钱开花"}, "余信": {"role": "总管房", "chs": "——", "note": "管各房房口油蜡", "aka": "愚信"}, "赖大": {"role": "荣府大管家", "chs": "——", "note": "赖嬷嬷之子", "aka": "——"}, "赖嬷嬷": {"role": "荣府老仆嬷嬷", "chs": "43-45", "note": "孙子赖尚荣捐县官，摆酒请贾母", "aka": "——"}, "赖尚荣": {"role": "赖大之子", "chs": "45+", "note": "州县官，\"熬了两三代才挣出这个体面\"", "aka": "——"}, "林之孝": {"role": "荣府管家，收账房田租", "chs": "——", "note": "其女小红", "aka": "——"}, "林之孝家的": {"role": "荣府管家娘子", "chs": "——", "note": "认小红之母，劝凤姐抬举", "aka": "——"}, "周瑞": {"role": "王夫人陪房，管春秋两季地租", "chs": "——", "note": "其妻为冷子兴岳母", "aka": "——"}, "周瑞家的": {"role": "王夫人陪房，冷子兴岳母", "chs": "6/27/74", "note": "引刘姥姥一进荣国府；抄检大观园执行人", "aka": "——"}, "来旺（旺儿）": {"role": "凤姐心腹小厮", "chs": "——", "note": "放债收利；替子强娶彩霞", "aka": "——"}, "兴儿": {"role": "贾琏小厮", "chs": "65-67", "note": "\"嘴甜心苦……\"评凤姐；\"大菩萨\"评平儿", "aka": "——"}, "隆儿、昭儿、庆儿": {"role": "贾琏小厮", "chs": "——", "note": "随行跑差", "aka": "——"}, "焦大": {"role": "宁府老仆，太爷辈出身", "chs": "7", "note": "醉骂\"爬灰的爬灰，养小叔子的养小叔子\"", "aka": "——"}, "鲍二": {"role": "贾琏仆", "chs": "21/44/64", "note": "其妻自缢案赔银了结；续娶多姑娘", "aka": "——"}, "鲍二家的": {"role": "鲍二原妻", "chs": "21/44", "note": "与贾琏私，事发自缢", "aka": "——"}, "多浑虫（多官）": {"role": "晴雯姑舅哥哥，厨役", "chs": "21/77", "note": "\"多官人皆唤他多浑虫\"", "aka": "——"}, "多姑娘（灯姑娘）": {"role": "多浑虫妻，鲍二续妻", "chs": "21/77", "note": "\"灯姑娘\"试宝玉（77 回）", "aka": "——"}, "乌进孝": {"role": "宁府庄头", "chs": "53", "note": "年例租单；乌庄头交租名场面", "aka": "——"}, "茗烟（焙茗）": {"role": "宝玉小厮之首", "chs": "1-120", "note": "闹学堂、买话本、代寻祭金钏", "aka": "——"}, "锄药、扫红、墨雨": {"role": "宝玉小厮群", "chs": "——", "note": "闹学堂诸小厮", "aka": "——"}, "李贵": {"role": "宝玉奶妈李嬷嬷之子，随学跟班", "chs": "9", "note": "背《诗经》\"呦呦鹿鸣\"闹笑话", "aka": "——"}, "李嬷嬷": {"role": "宝玉奶妈", "chs": "8/19/20", "note": "吃酥酪、骂袭人\"哄宝玉\"", "aka": "——"}, "赵嬷嬷": {"role": "贾琏乳母", "chs": "16", "note": "求奶哥哥儿子差事；\"省亲\"旧话佐证", "aka": "——"}, "宋嬷嬷": {"role": "凤姐陪房", "chs": "——", "note": "传话跑腿", "aka": "——"}, "秦显家的": {"role": "司棋之婶，大观园厨房觊觎者", "chs": "61-62", "note": "代掌一日即败退", "aka": "——"}, "倪二": {"role": "放贷无赖，贾芸近邻", "chs": "24", "note": "挥金助贾芸——\"义侠\"", "aka": "醉金刚"}, "卜世仁": {"role": "贾芸舅，开香料铺", "chs": "24", "note": "\"不是人\"谐音，拒绝赊借", "aka": "——"}, "彩明": {"role": "凤姐识字小厮", "chs": "——", "note": "代凤姐看账念单", "aka": "——"}, "袭人、晴雯、麝月、秋纹、碧痕": {"role": "怡红院大丫鬟", "chs": "——", "note": "见核心（晴雯、袭人、麝月）", "aka": "——"}, "绮霰、檀云": {"role": "怡红院丫鬟", "chs": "——", "note": "程本作绮霰；通行本或作绮霞", "aka": "——"}, "四儿（芸香／蕙香）": {"role": "怡红院小丫鬟", "chs": "21/77", "note": "\"同日生日便是夫妻\"语成罪状，被逐", "aka": "——"}, "佳蕙": {"role": "怡红院小丫鬟", "chs": "26", "note": "小红好友", "aka": "——"}, "坠儿": {"role": "怡红院小丫鬟", "chs": "26/49/52", "note": "虾须镯案，晴雯撵出", "aka": "——"}, "春燕": {"role": "怡红院小丫鬟，何婆之女", "chs": "58-59", "note": "\"柳叶渚边嗔莺咤燕\"", "aka": "——"}, "何婆（春燕娘）": {"role": "芳官干娘", "chs": "58-59", "note": "偏亲女苛待干女，被训", "aka": "——"}, "雪雁": {"role": "黛玉自苏州带来", "chs": "——", "note": "\"紫鹃从旁劝导\"之外的小丫头", "aka": "——"}, "春纤": {"role": "黛玉丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "文杏": {"role": "宝钗丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "琥珀": {"role": "贾母丫鬟", "chs": "——", "note": "与凤姐玩笑", "aka": "——"}, "翡翠、玻璃": {"role": "贾母丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "傻大姐": {"role": "贾母粗使小丫头", "chs": "73/96", "note": "拾绣春囊；泄\"宝二爷娶宝姑娘\"消息", "aka": "——"}, "丰儿": {"role": "凤姐小丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "莲花儿": {"role": "凤姐小丫鬟", "chs": "61", "note": "传膳要炖鸡蛋", "aka": "——"}, "抱琴": {"role": "元春丫鬟", "chs": "——", "note": "四大家丫鬟\"琴棋书画\"之首", "aka": "——"}, "司棋": {"role": "迎春大丫鬟", "chs": "——", "note": "抄检出潘又安情书；被逐撞墙（续书）", "aka": "——"}, "侍书": {"role": "探春丫鬟", "chs": "——", "note": "针砭利嘴", "aka": "——"}, "入画": {"role": "惜春丫鬟", "chs": "——", "note": "抄检中被惜春弃逐", "aka": "——"}, "绣桔": {"role": "迎春丫鬟", "chs": "73/80", "note": "与王住儿媳妇争累丝金凤", "aka": "绣橘（通行写法）"}, "素云、碧月": {"role": "李纨丫鬟", "chs": "——", "note": "稻香院", "aka": "——"}, "银蝶": {"role": "尤氏丫鬟", "chs": "——", "note": "宁府", "aka": "——"}, "金钏": {"role": "王夫人大丫鬟", "chs": "——", "note": "被逐投井（30/32 回）", "aka": "——"}, "玉钏": {"role": "金钏之妹", "chs": "——", "note": "\"白玉钏亲尝莲叶羹\"（35 回）", "aka": "——"}, "彩云": {"role": "王夫人丫鬟", "chs": "——", "note": "玫瑰露案与贾环情（60-61 回）", "aka": "——"}, "彩霞": {"role": "王夫人丫鬟", "chs": "——", "note": "与贾环有旧；被旺儿之子强聘（72 回）", "aka": "——"}, "翠墨": {"role": "探春丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "翠缕": {"role": "湘云丫鬟", "chs": "31", "note": "\"拾翠论阴阳\"格物问难", "aka": "——"}, "篆儿": {"role": "邢岫烟丫鬟", "chs": "——", "note": "偶见", "aka": "——"}, "茫茫大士、渺渺真人": {"role": "幻境与红尘摆渡人", "chs": "1/25/120", "note": "点化石头；赴红尘历劫；续书携宝玉归大荒", "aka": "一僧一道"}, "癞头和尚、跛足道人": {"role": "僧道红尘化身", "chs": "1/8/12/25", "note": "给宝玉金锁偈语、救凤姐宝玉魇魔法", "aka": "——"}, "空空道人（情僧）": {"role": "抄录《石头记》者", "chs": "1", "note": "\"将这《石头记》再检阅一遍\"——元结构", "aka": "——"}, "警幻仙子": {"role": "太虚幻境之主", "chs": "1/5", "note": "金陵十二钗判词演曲", "aka": "警幻仙姑"}, "神瑛侍者": {"role": "宝玉前身", "chs": "1", "note": "甘露灌溉绛珠草", "aka": "——"}, "绛珠仙子": {"role": "黛玉前身", "chs": "1", "note": "\"还泪\"之约", "aka": "——"}, "张道士": {"role": "清虚观主持，荣国公替身", "chs": "28-29", "note": "端阳节打醮，\"遮天大王\"圣诞", "aka": "——"}, "马道婆": {"role": "宝玉寄名干娘", "chs": "25", "note": "受赵姨娘银钱魇魔法", "aka": "——"}, "王一贴": {"role": "见方外", "chs": "——", "note": "见方外", "aka": "——"}, "净虚": {"role": "馒头庵（水月庵）老姑子", "chs": "——", "note": "凤姐弄权铁槛寺经手人", "aka": "——"}, "智通、智善": {"role": "水月庵姑子", "chs": "——", "note": "净虚门下", "aka": "——"}, "智能儿": {"role": "水月庵小姑子", "chs": "——", "note": "与秦钟情", "aka": "——"}, "圆心": {"role": "地藏庵姑子", "chs": "77", "note": "与智通拐芳官等出家\"做活计\"", "aka": "圆信（通行本写法）"}, "张友士": {"role": "冯紫英荐的太医（客居）", "chs": "10", "note": "为可卿诊脉断\"心细气盛，虑伤脾\"", "aka": "张先生"}, "文官": {"role": "十二官之一", "chs": "54/58", "note": "分与贾母", "aka": "——"}, "藕官": {"role": "小生", "chs": "58-77", "note": "分与黛玉；烧纸祭菂官", "aka": "——"}, "菂官": {"role": "小旦，藕官戏中妻", "chs": "58", "note": "病死；程乙本写作\"荳官\"（与六十二回丫鬟荳官同名异人），通行本作\"菂官\"", "aka": "——"}, "蕊官": {"role": "小旦", "chs": "58-77", "note": "分与宝钗；与藕官蕊官\"续弦\"论", "aka": "——"}, "葵官": {"role": "大花面", "chs": "58", "note": "分与湘云", "aka": "韦大英"}, "豆官": {"role": "小花面", "chs": "58", "note": "分与宝琴", "aka": "——"}, "艾官": {"role": "老外", "chs": "58", "note": "分与探春", "aka": "——"}, "茄官": {"role": "老旦", "chs": "58", "note": "分与尤氏", "aka": "——"}, "宝官、玉官": {"role": "十二官", "chs": "30/36", "note": "寻龄官者", "aka": "——"}, "金荣": {"role": "学堂学童，璜大奶奶之侄", "chs": "9-10", "note": "\"磞\"秦钟掷砚风波主角", "aka": "——"}, "金寡妇（胡氏）": {"role": "金荣母", "chs": "10", "note": "忍气吞声", "aka": "——"}, "金氏（璜大奶奶）": {"role": "贾璜妻，金荣姑妈", "chs": "10", "note": "兴师问罪，见尤氏而气平", "aka": "——"}, "香怜、玉爱": {"role": "学堂学子", "chs": "9", "note": "被金荣等轻薄", "aka": "——"}, "云儿": {"role": "锦香院妓女", "chs": "28", "note": "冯紫英家宴唱曲陪酒", "aka": "——"}, "尤老娘": {"role": "尤氏继母，二姐三姐之母", "chs": "63-69", "note": "再嫁尤氏父带来二女", "aka": "——"}, "潘又安": {"role": "司棋姑表弟", "chs": "71-72/92", "note": "绣春囊案情郎；续书发财回来，司棋殉情", "aka": "——"}, "二丫头": {"role": "农庄村女", "chs": "15", "note": "纺线与宝玉一眼之缘", "aka": "——"}, "何三": {"role": "周瑞干儿子", "chs": "111-112", "note": "勾引贼人入府（续书）", "aka": "——"}, "卫若兰": {"role": "王孙公子，28 回冯紫英座上客", "chs": "28", "note": "脂批：后与湘云有姻缘（金麒麟伏）", "aka": "——"}, "石头（通灵宝玉）": {"role": "女娲炼石剩玉", "chs": "1", "note": "自述《石头记》来历；宝玉所衔之玉", "aka": "顽石／蠢物"}, "曹雪芹": {"role": "\"批阅十载，增删五次\"题记者", "chs": "1", "note": "元结构署名，非书中角色", "aka": "——"}, "孔梅溪": {"role": "东鲁孔梅溪题《风月宝鉴》", "chs": "1", "note": "元结构题名者", "aka": "——"}, "迎春": {"role": "贾赦女", "chs": "1-120", "note": "嫁孙绍祖"}, "张金哥·金哥": {"role": "", "chs": "15-16", "note": ""}}};
+const COLOR = {'史':'#7b5ea7','王':'#2e6f8e','薛':'#a4702e','林':'#4a7c59'};
+function marryColor(nm){
+  if(nm.includes('贾母')) return '史';
+  if(nm.includes('王熙凤')||nm.includes('王夫人')) return '王';
+  if(nm.includes('薛宝钗')) return '薛';
+  if(nm.includes('林如海')) return '林';
+  return null;
+}
+const stage=document.getElementById('stage'), sv=document.getElementById('sv');
+const LEAF_W=142, ROW_H=118, TOP=54, LFX=70;
+let leaf=0, nodes=[];
+function layout(nd, depth, parent){
+  nd._d=depth;
+  const kids=nd.children||[];
+  if(kids.length===0){ nd._x=LFX+leaf*LEAF_W; leaf++; }
+  else{ kids.forEach(k=>layout(k,depth+1,nd)); nd._x=(kids[0]._x+kids[kids.length-1]._x)/2; }
+  nodes.push(nd);
+}
+DATA.roots.forEach(r=>layout(r,0,null));
+const maxD=Math.max(...nodes.map(n=>n._d));
+stage.style.height=(TOP+ (maxD)*ROW_H+120)+'px';
+stage.style.minWidth=(LFX*2+leaf*LEAF_W)+'px';
+function draw(){
+  sv.setAttribute('width',stage.scrollWidth); sv.setAttribute('height',stage.scrollHeight);
+  sv.innerHTML='';
+  stage.querySelectorAll('.node').forEach(e=>e.remove());
+  nodes.forEach(nd=>{
+    const y=TOP+nd._d*ROW_H;
+    const el=document.createElement('div');
+    el.className='node'+(nd._d===0?' gen0':'')+(nd.name.startsWith('贾')?' male':'');
+    el.style.left=nd._x+'px'; el.style.top=y+'px';
+    el.innerHTML='<div class="nm">'+nd.name+'</div>'
+      +(nd.spouse?'<div class="sp">配 '+nd.spouse+'</div>':'')
+      +(nd.tag?'<div class="tg">'+nd.tag+'</div>':'');
+    el.onclick=()=>show(nd.name, nd.spouse);
+    stage.appendChild(el);
+    nd._y=y;
+    if(parent){
+      const py=parent._y+78, path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      const mx=nd._x, px=parent._x;
+      path.setAttribute('d',`M ${px} ${py} L ${px} ${py+22} L ${mx} ${py+22} L ${mx} ${y-4}`);
+      path.setAttribute('stroke','#b9a884'); path.setAttribute('fill','none'); path.setAttribute('stroke-width','1.4');
+      sv.appendChild(path);
+    }
+    if(nd.spouse){
+      const c=marryColor(nd.spouse+nd.name);
+      if(c){
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',nd._x-64); ln.setAttribute('x2',nd._x-64);
+        ln.setAttribute('y1',y); ln.setAttribute('y2',y+80);
+        ln.setAttribute('stroke',COLOR[c]); ln.setAttribute('stroke-width','2.2');
+        ln.setAttribute('class','marry'); ln.setAttribute('opacity','.75');
+        sv.appendChild(ln);
+      }
+    }
+  });
+  // 薛家姻亲：宝玉-宝钗（配偶已在卡内，虚线标于节点右下）
+  const bw=nodes.find(n=>n.name==='贾宝玉');
+  if(bw){const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+    ln.setAttribute('x1',bw._x+64);ln.setAttribute('x2',bw._x+64);ln.setAttribute('y1',bw._y);ln.setAttribute('y2',bw._y+80);
+    ln.setAttribute('stroke',COLOR['薛']);ln.setAttribute('stroke-width','2.2');ln.setAttribute('class','marry');sv.appendChild(ln);}
+}
+function show(name, spouse){
+  const info=DATA.info[name]||{};
+  document.getElementById('panel').innerHTML=
+   '<h3>'+name+'</h3>'
+   +'<div class="meta">'+[info.role||'', info.chs?('关键回数：'+info.chs):''].filter(Boolean).join(' ｜ ')
+   +(spouse?' ｜ 配偶：'+spouse:'')+'</div>'
+   +'<p>'+(info.note||'')+(info.aka&&info.aka!=='——'?'（又称：'+info.aka+'）':'')+'</p>';
+}
+draw();
+window.addEventListener('resize',draw);
+</script>
+</body></html>
