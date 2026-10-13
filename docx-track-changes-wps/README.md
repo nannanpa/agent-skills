@@ -21,6 +21,7 @@ WPS 对修订 XML 极其敏感，手写的 `w:ins`/`w:del` 很容易触发"彩�
 
 > 本目录只保留最新版；历史版本见 git 提交记录。
 
+- **2026-10-13 SkillHub 1.0.1**：分发侧补充自定义图标与分类标签（内容无变化）
 - **2026-10-12 首发**：python-docx + lxml 给 .docx 插入修订模式（tracked changes，兼容 WPS）
 
 ## License
