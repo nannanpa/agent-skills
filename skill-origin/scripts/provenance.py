@@ -95,7 +95,7 @@ def fetch_repo(full_name: str):
     """GitHub API 查询仓库；返回 dict / None（不存在）/ "RATE_LIMITED"（限流）。
 
     限流必须与"仓库不存在"区分：限流时无法判定≠无背书，误判 D 档是冤案。
-    无需任何密钥，匿名调用即可（限额 60 次/时，日常核验足够）。
+    匿名公开接口即可调用（限额 60 次/时，日常核验足够）。
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"}
     req = urllib.request.Request(API.format(full_name), headers=headers)
