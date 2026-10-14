@@ -10,7 +10,7 @@
 
 本笔记不单独成 skill，它的用法是**叠加在上游公文写作 skill 之上**。把下面这段话直接扔给你的 agent（WorkBuddy / Codex / Claude Code 均可）即可一步完成：
 
-> 帮我装公文写作技能：先溯源安装 moxt.ai 的《公文写作 DNA》skill（GitHub 上流传的 lieflat-gongwen 的上游原版），装好后从 https://raw.githubusercontent.com/nannanpa/agent-skills/main/notes/gongwen-style-calibration.md 下载《公文写作风格校准实战笔记》（即本文），存进该技能目录，并在技能入口注明：写公文时先读这份笔记、叠加作者实测经验。
+> 帮我装公文写作技能：先溯源安装 moxt.ai 的《公文写作 DNA》skill（GitHub 上流传的 lieflat-gongwen 的上游原版），装好后从 https://github.com/nannanpa/agent-skills/releases/download/notes-v1.0.0/gongwen-style-calibration.md 下载《公文写作风格校准实战笔记》（即本文；若该链接失效，改用 https://raw.githubusercontent.com/nannanpa/agent-skills/main/notes/gongwen-style-calibration.md ），存进该技能目录，并在技能入口注明：写公文时先读这份笔记、叠加作者实测经验。
 
 说明：
 - 上游 skill 版权与许可归 moxt.ai（PolyForm Noncommercial），个人使用合规；
