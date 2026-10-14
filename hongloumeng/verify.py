@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""红楼梦技能 · 语料回归测试
+"""红楼梦技能 · 语料回归测试（v1.1.0 合卷版）
 用法: python3 verify.py   （在本技能目录或任意位置运行均可）
 
 任何人修改 references/ 下的语料后，跑一遍即可知道有没有改坏。
+语料结构（1.1.0 起，为满足 SkillHub 单包 ≤200 文件限制）：
+  - 程高本简体 120 回：保持单回 ch001-ch120.txt
+  - 程高本繁体 120 回：合并为 6 卷（每卷 20 回），卷内以回目行"第N回"分章
+  - 脂评本 80 回+凡例序：合并为 8 卷（每卷 10 回）
 检查项：
-  1. 文件完整性      程高本简/繁各 120 回 + 脂评本 81 文件，非空
+  1. 文件完整性      简体 120 单回 + 繁体 6 卷 + 脂评本 8 卷，非空，
+                     且繁/脂各卷回号按序连续（顺序校验解析）
   2. 缺字占位 □     程高本两版必须为 0；脂评本对照基线（泐损保留）
   3. mojibake 残片   汉字夹星号 / 汉字夹 ASCII 字母 / 私用区字符
   4. ASCII 引号      程高本不得残留反引号与单引号作引文
   5. 关键引文点      18 处修复点抽检（全部必须命中）
-  6. 简繁结构一致    每回去除空白后字符数两版必须相等
+  6. 简繁结构一致    逐回去除空白后字符数两版必须相等
+                     （同时验证合卷未丢字：繁体按卷拆回后与简体逐回比对）
   7. ch055 错简修复  长度正常且含章尾语（防误接 120 回文字复发）
-  8. (可选)逐字对照  若装有 opencc，简体版转回繁体与繁体版逐字比对，
+  8. (可选)逐字对照  若装有 opencc，简体版转回繁体与繁体版逐回比对，
                      允许三回共 4 处已知转换器粒度差（见 KNOWN_SPOT_DIFFS）
 
 退出码: 0 = 全部通过；1 = 存在 FAIL。
@@ -56,6 +62,10 @@ SPOTS = [  # 18 个关键引文点（五批校勘的修复位置）
     ('ch120', '行到毗陵驿地方'),
 ]
 
+CN = {'零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7,
+      '八': 8, '九': 9}
+HEAD = re.compile(r'(?m)^第([一二三四五六七八九十百零]{1,8})回')
+
 results = []  # (级别, 组名, 消息)
 
 
@@ -67,72 +77,151 @@ def read(p):
     return p.read_text(encoding='utf-8')
 
 
+def cn2int(s: str) -> int:
+    """中文回号 → 整数（1-120）。'百'/'十'传统式；否则数字位式（一零零=100、一一三=113）。"""
+    if '百' not in s and '十' not in s:
+        return int(''.join(str(CN[c]) for c in s))
+    total, cur = 0, 0
+    for ch in s:
+        if ch == '十':
+            total += (cur or 1) * 10
+            cur = 0
+        elif ch == '百':
+            total += (cur or 1) * 100
+            cur = 0
+        elif ch != '零':
+            cur = cur + CN[ch]
+    return total + cur
+
+
+def parse_volume(text: str, start: int):
+    """顺序校验拆卷 → ({回号: 回文本}, 接受的回号序列)。
+
+    回目头 = 行首"第N回"（后可跟回目）；仅当解析出的回号等于预期下一回时
+    才接受为章首。段终点 = 下一个**被接受**的回目头（被拒绝的匹配——如正文
+    行首承接语"第四回中既將…"、源语料 ch045 的重复回目头——全部归入上一章
+    正文，保证与简体单回文件逐字对应）。
+    """
+    ms = list(HEAD.finditer(text))
+    accepted_idx = []
+    expected = start
+    for i, m in enumerate(ms):
+        if cn2int(m.group(1)) == expected:
+            accepted_idx.append(i)
+            expected += 1
+    segs = {}
+    for k, i in enumerate(accepted_idx):
+        m = ms[i]
+        end = ms[accepted_idx[k + 1]].start() if k + 1 < len(accepted_idx) else len(text)
+        segs[cn2int(m.group(1))] = text[m.start():end]
+    return segs, [cn2int(ms[i].group(1)) for i in accepted_idx]
+
+
+def vol_range(name: str):
+    m = re.search(r'第(\d+)-(\d+)回', name)
+    return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+
+
 # ---------- 1. 文件完整性 ----------
-missing = []
-for d in (S, T):
-    for i in range(1, 121):
-        f = d / f'ch{i:03d}.txt'
-        if not f.exists() or f.stat().st_size == 0:
-            missing.append(str(f))
-for i in range(81):
-    pat = list(Z.glob(f'ch{i:03d}*.txt'))
-    if not pat or pat[0].stat().st_size == 0:
-        missing.append(str(Z / f'ch{i:03d}*.txt'))
-check('FAIL' if missing else 'PASS', '完整性',
-      f'程高本简/繁各 120 回 + 脂评本 81 文件' +
-      ('' if not missing else f'；缺失 {len(missing)} 个: {missing[:5]}'))
+problems = []
+for i in range(1, 121):
+    f = S / f'ch{i:03d}.txt'
+    if not f.exists() or f.stat().st_size == 0:
+        problems.append(str(f))
 
-# ---------- 2-4. 程高本扫描 ----------
-texts_s, texts_t = {}, {}
-for d, store in ((S, texts_s), (T, texts_t)):
-    for i in range(1, 121):
-        store[i] = read(d / f'ch{i:03d}.txt')
+t_chapters = {}   # 回号 -> 繁体回文本（自回目头起）
+t_vols = sorted(T.glob('卷*.txt'))
+if len(t_vols) != 6:
+    problems.append(f'繁体卷数 {len(t_vols)} ≠ 6')
+for vf in t_vols:
+    lo, hi = vol_range(vf.name)
+    if lo is None:
+        problems.append(f'繁体卷文件名缺回号范围: {vf.name}')
+        continue
+    segs, accepted = parse_volume(read(vf), lo)
+    if accepted != list(range(lo, hi + 1)):
+        problems.append(f'{vf.name} 回号序列异常')
+    for n, body in segs.items():
+        if n in t_chapters:
+            problems.append(f'繁体回 {n} 重复')
+        t_chapters[n] = body
 
+z_vols = sorted(Z.glob('卷*.txt'))
+if len(z_vols) != 8:
+    problems.append(f'脂评本卷数 {len(z_vols)} ≠ 8')
+z_texts = {}
+for vf in z_vols:
+    lo, hi = vol_range(vf.name)
+    if lo is None:
+        problems.append(f'脂评本卷文件名缺回号范围: {vf.name}')
+        continue
+    txt = read(vf)
+    segs, accepted = parse_volume(txt, lo)
+    if accepted != list(range(lo, hi + 1)):
+        problems.append(f'{vf.name} 回号序列异常')
+    z_texts[vf.name] = txt
+if z_vols and '凡例' not in read(z_vols[0]) and '戚蓼生' not in read(z_vols[0]):
+    problems.append('脂评本卷01 缺凡例/序')
+
+check('FAIL' if problems else 'PASS', '完整性',
+      '简体 120 单回 + 繁体 6 卷(20回/卷) + 脂评本 8 卷(10回/卷)，回号连续'
+      if not problems else f'问题 {len(problems)} 处: {problems[:5]}')
+
+# ---------- 简体全文本 ----------
+texts_s = {i: read(S / f'ch{i:03d}.txt') for i in range(1, 121)
+           if (S / f'ch{i:03d}.txt').exists()}
+
+# ---------- 2. 缺字占位 ----------
 box_bad = [i for i, t in texts_s.items() if '□' in t]
-box_bad += [i for i, t in texts_t.items() if '□' in t]
+box_bad += [i for i, t in t_chapters.items() if '□' in t]
 check('FAIL' if box_bad else 'PASS', '缺字占位',
-      f'程高本简/繁 □ = 0' if not box_bad else f'发现 □ 的回: {sorted(set(box_bad))}')
+      '程高本简/繁 □ = 0' if not box_bad else f'发现 □ 的回: {sorted(set(box_bad))}')
 
+# ---------- 3. mojibake 残片 ----------
 MOJI = [
     (r'[一-鿿]\*', '汉字夹星号'),
     (r'[一-鿿][A-Za-z]|[A-Za-z][一-鿿]', '汉字夹字母'),
     (r'[\ue000-\uf8ff]', '私用区字符'),
 ]
 moji_bad = []
-for i, t in list(texts_s.items()) + list(texts_t.items()):
+for t in list(texts_s.values()) + list(t_chapters.values()):
     for pat, label in MOJI:
         if re.search(pat, t):
-            moji_bad.append((i, label))
+            moji_bad.append(label)
 check('FAIL' if moji_bad else 'PASS', 'mojibake 残片',
-      f'两版 240 文件无 mojibake' if not moji_bad else f'残片: {moji_bad[:10]}')
+      '两版 240 回无 mojibake' if not moji_bad else f'残片: {moji_bad[:10]}')
 
+# ---------- 4. ASCII 引号 ----------
 quote_bad = [i for i, t in texts_s.items() if '`' in t] + \
-            [i for i, t in texts_t.items() if '`' in t]
+            [i for i, t in t_chapters.items() if '`' in t]
 check('FAIL' if quote_bad else 'PASS', 'ASCII 引号',
       '反引号 = 0（内层引文已归一）' if not quote_bad
       else f'残留反引号的回: {sorted(set(quote_bad))}')
 
 # ---------- 5. 关键引文点 ----------
-miss = [(ch, kw) for ch, kw in SPOTS if kw not in texts_s[int(ch[2:])]]
+miss = [(ch, kw) for ch, kw in SPOTS
+        if int(ch[2:]) in texts_s and kw not in texts_s[int(ch[2:])]]
 check('FAIL' if miss else 'PASS', '关键引文点',
       f'{len(SPOTS) - len(miss)}/{len(SPOTS)} 命中'
       if not miss else f'未命中: {miss}')
 
-# ---------- 6. 简繁结构一致 ----------
+# ---------- 6. 简繁结构一致（逐回，兼验合卷无丢字） ----------
 uneq = [i for i in texts_s
-        if len(re.sub(r'\s', '', texts_s[i])) != len(re.sub(r'\s', '', texts_t[i]))]
-check('FAIL' if uneq else 'PASS', '简繁结构一致',
-      '120 回去空白后字符数逐回相等' if not uneq else f'长度不等的回: {uneq}')
+        if i in t_chapters and
+        len(re.sub(r'\s', '', texts_s[i])) != len(re.sub(r'\s', '', t_chapters[i]))]
+absent = [i for i in texts_s if i not in t_chapters]
+check('FAIL' if uneq or absent else 'PASS', '简繁结构一致',
+      '120 回去空白后字符数逐回相等（含合卷完整性）'
+      if not uneq and not absent else f'长度不等的回: {uneq}; 繁体缺回: {absent}')
 
 # ---------- 7. ch055 错简修复 ----------
-t55 = texts_s[55]
+t55 = texts_s.get(55, '')
 ok55 = 4000 < len(t55) < 12000 and '且听下回分解' in t55[-200:]
 check('PASS' if ok55 else 'FAIL', 'ch055 错简修复',
       f'长度 {len(t55)} 字、章尾语完好' if ok55 else 'ch055 异常（疑似截断/误接复发）')
 
 # ---------- 2b. 脂评本 □ 基线 ----------
-zhi_texts = {f.name: read(f) for f in sorted(Z.glob('ch*.txt'))}
-zhi_boxes = sum(t.count('□') for t in zhi_texts.values())
+zhi_boxes = sum(t.count('□') for t in z_texts.values())
 if zhi_boxes == ZHI_BOX_BASELINE:
     check('PASS', '脂评本 □ 基线', f'{zhi_boxes} 处泐损保留（与基线一致）')
 else:
@@ -146,8 +235,11 @@ try:
     cc = OpenCC('t2s')
     diff_total = {}
     for i in range(1, 121):
-        t2s = cc.convert(texts_t[i])
-        n = sum(1 for a, b in zip(t2s, texts_s[i]) if a != b) + abs(len(t2s) - len(texts_s[i]))
+        if i not in t_chapters:
+            continue
+        t2s = cc.convert(t_chapters[i])
+        n = sum(1 for a, b in zip(t2s, texts_s.get(i, ''))
+                if a != b) + abs(len(t2s) - len(texts_s.get(i, '')))
         if n:
             diff_total[i] = n
     bad = {k: v for k, v in diff_total.items()
