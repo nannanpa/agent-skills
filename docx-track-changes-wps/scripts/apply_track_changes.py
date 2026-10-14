@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """WPS-safe tracked-change (修订模式) inserter for .docx.
 
 Usage:
@@ -15,29 +16,69 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 
-def open_for_revision(src, author="发展规划与学科建设处", date_iso="2026-07-23T09:00:00Z"):
+def _max_revision_id(doc):
+    """扫描正文既有修订（w:ins / w:del）的 w:id 最大值。
+
+    文档自带修订史时（真实公文常态），固定 10001 起号必然撞号
+    （Windows 侧 2026-10-14 实测复现），故起号取 max(10000, 既有最大值)。
+    """
+    m = 0
+    for tag in ("w:ins", "w:del"):
+        for el in doc.element.body.iter(qn(tag)):
+            v = el.get(qn("w:id"))
+            if v and v.lstrip("-").isdigit() and abs(int(v)) > m:
+                m = abs(int(v))
+    return m
+
+
+def open_for_revision(src, author="审校", date_iso="2026-07-23T09:00:00Z"):
     """Open src, enable trackChanges + rsidRoot, return (doc, counter)."""
     doc = docx.Document(src)
     settings = doc.settings.element
 
-    def ensure_child(parent, tag, attrs=None):
+    def ensure_child(parent, tag, attrs=None, before_tags=()):
+        """Find a *direct* child `tag` of parent; create it if missing.
+
+        New elements are inserted before the first present tag listed in
+        `before_tags`（CT_Settings schema-order anchors），保持 settings.xml
+        元素顺序合法；都不存在时才追加到末尾。
+        """
         el = parent.find(qn(tag))
         if el is None:
             el = OxmlElement(tag)
             if attrs:
                 for k, v in attrs.items():
                     el.set(qn(k), v)
-            parent.append(el)
+            anchor = None
+            for bt in before_tags:
+                anchor = parent.find(qn(bt))
+                if anchor is not None:
+                    break
+            if anchor is not None:
+                anchor.addprevious(el)
+            else:
+                parent.append(el)
         elif attrs:
             for k, v in attrs.items():
                 el.set(qn(k), v)
         return el
 
-    ensure_child(settings, "w:trackChanges", {"w:val": "true"})
-    rsid_default = settings.find(qn("w:rsidRDefault"))
+    # CT_Settings 顺序：trackChanges 应位于 defaultTabStop 等后继元素之前
+    ensure_child(settings, "w:trackChanges", {"w:val": "true"},
+                 before_tags=("w:defaultTabStop", "w:characterSpacingControl",
+                              "w:savePreviewPicture", "w:compat", "w:docVars",
+                              "w:rsids", "w:mathPr"))
+    # w:rsidRoot / w:rsidRDefault 不是 w:settings 的直接子元素，而是包在 w:rsids 内；
+    # 旧版直接 append 到 settings 下属非法位置（实测 rsidRoot 嵌在 w:rsids 里，
+    # settings.find 永远找不到，导致重复追加非法元素），Word/WPS 均可能拒开。
+    rsids = ensure_child(settings, "w:rsids",
+                         before_tags=("w:mathPr", "w:themeFontLang",
+                                      "w:clrSchemeMapping", "w:decimalSymbol",
+                                      "w:listSeparator"))
+    rsid_default = rsids.find(qn("w:rsidRDefault"))
     root_val = rsid_default.get(qn("w:val")) if rsid_default is not None else "00FF1234"
-    ensure_child(settings, "w:rsidRoot", {"w:val": root_val})
-    counter = [10000]
+    ensure_child(rsids, "w:rsidRoot", {"w:val": root_val})
+    counter = [max(10000, _max_revision_id(doc))]
     return doc, counter, author, date_iso
 
 
@@ -110,6 +151,14 @@ def verify(path):
     assert z.testzip() is None, "zip corrupted"
     etree.fromstring(z.read("word/document.xml"))  # well-formed
     root = etree.fromstring(z.read("word/document.xml"))
+    # settings.xml 结构回归（防 rsidRoot 错位复发）
+    sroot = etree.fromstring(z.read("word/settings.xml"))
+    assert sroot.find(qn("w:trackChanges")) is not None, "trackChanges missing"
+    rsids_el = sroot.find(qn("w:rsids"))
+    assert rsids_el is not None and rsids_el.find(qn("w:rsidRoot")) is not None, \
+        "w:rsidRoot must live inside w:rsids"
+    assert sroot.find(qn("w:rsidRoot")) is None, \
+        "w:rsidRoot must NOT be a direct child of w:settings"
     body = root.find(qn("w:body"))
     ins = body.findall(".//" + qn("w:ins"))
     dels = body.findall(".//" + qn("w:del"))
@@ -124,7 +173,7 @@ def verify(path):
 if __name__ == "__main__":
     src = sys.argv[1]
     out = sys.argv[2]
-    author = sys.argv[3] if len(sys.argv) > 3 else "发展规划与学科建设处"
+    author = sys.argv[3] if len(sys.argv) > 3 else "审校"
     date_iso = sys.argv[4] if len(sys.argv) > 4 else "2026-07-23T09:00:00Z"
     doc, counter, a, d = open_for_revision(src, author, date_iso)
     # Example: insert an addition after the first occurrence of a phrase.

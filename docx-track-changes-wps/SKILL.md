@@ -19,13 +19,25 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 
 ## WPS 彩虹圈规避清单（必查）
 
-1. **`w:id` 全文唯一**（用全局计数器，从 10001 这类高位起号，避免与文档既有 id 冲突）。
+1. **`w:id` 全文唯一**（计数器起号取 max(10000, 文档既有 `w:ins`/`w:del` id 最大值)——固定 10001 起号在自带修订史的稿件上必然撞号，Windows 侧 2026-10-14 实测复现；实现见 `_max_revision_id`，附两轮插入-重开回归测试）。
 2. **`w:date` 合法**，ISO 8601 格式，如 `2026-07-23T09:00:00Z`。
 3. 每个 `w:ins` 上都要有 **`w:author`**。
-4. **正确启用修订**：`word/settings.xml` 里加 `<w:trackChanges w:val="true"/>`，同时加 `<w:rsidRoot w:val="..."/>`（有现成 `w:rsidRDefault` 值就复用，没有就用固定 8 位十六进制）。run 带 `w:rsidR` 而缺 `rsidRoot` 是已知的 WPS 卡死诱因。
+4. **正确启用修订**：`word/settings.xml` 里加 `<w:trackChanges w:val="true"/>`；`<w:rsidRoot w:val="..."/>` **必须放在 `w:rsids` 元素内部**（`w:rsidRoot`/`w:rsidRDefault` 都不是 `w:settings` 的直接子元素——用 `settings.find()` 找不到就会误判缺失而重复追加非法元素，这是实测踩过的坑）。新增元素的插入位置要符合 CT_Settings 顺序：`trackChanges` 在 `defaultTabStop` 之前、`rsids` 在 `mathPr`/`themeFontLang` 之前。run 带 `w:rsidR` 而缺 `rsidRoot` 是已知的 WPS 卡死诱因。
 5. **插入的 `w:r` 不带 `w:rPr`**（`w:ins` 里就是纯 `<w:r><w:t>...</w:t></w:r>`）。rPr 引用了文档里不存在的字体/样式可能让 WPS 死循环。
 6. **绝不碰 body 级 `w:sectPr`**（它是 `w:body` 的直接子元素，不在最后一段里面），也不把末尾分节符段落包进 `w:ins`/`w:del`。
 7. `w:t` 文本保留 `xml:space="preserve"`，保证首尾空格不丢。
+
+## 适用环境与未验证声明（诚实边界）
+
+- **实测环境**：macOS + WPS。开发、调试、彩虹圈规避清单均来自 macOS 版 WPS 的实测。
+- **实测通过（2026-10-14，双平台闭环）**：①macOS + WPS；②Windows 10 Pro 22H2 + WPS Office 12.1.0.29161 个人版——修复版 self_test 一次全绿（Python 3.13.14 / python-docx 1.2.0）；WPS 三点检查：打开【过】、接受/拒绝【过】、修订轨作者与动作可见（时间列不显示，见"已知坑"，判定为窗格显示惯例，不影响验收）；"接受修订"后的 WPS 另存件经 XML 解剖确认：w:ins 归零、插入文本并入正文、行为正确。
+- **仍未验证**：Microsoft Word 桌面版、WPS 移动端。设计上应当兼容（输出为标准 OOXML 修订标记、settings 元素顺序符合 ECMA-376、全程不用 `w:del`），用到时按本节三步验收走一遍即可。
+- **Windows 首次使用前的三步验收**：
+  1. 跑 `scripts/self_test.py` 生成测试件并确认结构校验全绿；
+  2. 用 Windows WPS 打开测试件：不卡彩虹圈、修订轨正常显示、作者与日期正确；
+  3. 做一次"接受修订 / 拒绝修订"操作无异常。
+  任一步失败：本技能产出停用，改人工修订，并把现象记入"已知坑"。
+- **兜底底气**：本技能是**插入式修订且原件永不动**（操作步骤第 1 条先复制原件）——最坏情况是显示异常，"拒绝所有修订"或弃用输出文件、重开原件即回到原状，**不存在数据损坏路径**。
 
 ## 操作步骤
 
@@ -34,6 +46,8 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 3. 对每条修订：定位目标段落和包含边界短语的锚点 **run**。这类文档里所有 run 通常 `style=None`（继承段落字体）——可安全复制或省略 `rPr`。
 4. 把新增文字作为 `w:ins` 元素，作为兄弟节点紧插在锚点 run 之后。如果边界短语在 run 中间结束，先在该偏移处拆分 run（把 `rPr` 复制给新的后缀 run，原 run 文本设为前缀），再把 `w:ins` 插在前缀和后缀之间。
 5. `doc.save(...)` 后校验（见下）。
+
+- **WPS 个人版修订窗格不显示时间列。** 作者与"插入了内容"动作可见，插入时间默认不展示（Windows 10 + WPS 12.1.0.29161 实测）。验收以"作者+动作+位置可见"为准；需核对时间时读 XML 里的 `w:date`，或测试件把 `w:date` 设为当天当地时刻再人工比对。
 
 ## 已知坑
 
@@ -45,7 +59,7 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 
 - `zipfile.ZipFile(path).testzip()` 返回 `None`（压缩包完好）；
 - `etree.fromstring(z.read('word/document.xml'))` 可解析（XML 合法）；
-- `trackChanges` 为 `true`；`rsidRoot` 存在；
+- `trackChanges` 为 `true`；`rsidRoot` 存在**且位于 `w:rsids` 内**（不得是 `w:settings` 的直接子元素）；settings 子元素顺序符合 schema（`verify()` 已内置断言）；
 - `w:ins` 数量符合预期、`w:del` 为 0（只插入模式下）、`w:id` 集合唯一、每个 `w:ins` 都有 author+date+内部 `w:r`；
 - 逐个目标段落检查全文（含 `w:ins`）包含插入的关键词。
 
