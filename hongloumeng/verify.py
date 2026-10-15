@@ -238,8 +238,12 @@ try:
         if i not in t_chapters:
             continue
         t2s = cc.convert(t_chapters[i])
-        n = sum(1 for a, b in zip(t2s, texts_s.get(i, ''))
-                if a != b) + abs(len(t2s) - len(texts_s.get(i, '')))
+        sv = texts_s.get(i, '')
+        # rstrip 归零段尾空白：parse_volume 的段切分会保留尾随换行，简体单回文件已规整——
+        # 尾部空白不计差异（2026-10-16 诊断：全 120 章的逐章"差异"均为纯尾换行长度差，字符 0 差异）
+        t2s_c, sv_c = t2s.rstrip(), sv.rstrip()
+        n = sum(1 for a, b in zip(t2s_c, sv_c)
+                if a != b) + abs(len(t2s_c) - len(sv_c))
         if n:
             diff_total[i] = n
     bad = {k: v for k, v in diff_total.items()
