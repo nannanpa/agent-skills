@@ -17,6 +17,25 @@
 
 版本纪律：**真源 = `skills.json`**。漂移时二选一：① 同号——改 SKILL.md 的 version；② 有意分版——发布时显式 `--version <SkillHub侧版本>`，并在技能 README 发布记录中说明。
 
+## 夹具隔离（2026-10-15 立，先于一切配方）
+
+**涉及改写 SKILL.md 的测试（配方 2/3），必须在一次性仓库副本上跑，禁止在正式仓库工作区就地改写。**
+
+原因：就地改写依赖"复原总会执行"，中断（Ctrl-C / 崩溃 / 超时）会让公开仓库里的文件停在改写值，未提交、无人发现。2026-10-15 实测产生过 3 个临时文件残留（temp-file + 原子改名写入法的副产物）。
+
+标准流程：
+
+```
+1. TESTROOT=$(mktemp -d)
+2. cp -a <workspace>/agent-skills "$TESTROOT/"          # 含 .git，被测对象完整隔离
+3. cp -a <workspace>/skillhub-publish "$TESTROOT/"      # 脚本 REPO 按相对路径自动指向副本
+4. cd "$TESTROOT/skillhub-publish" 后执行各配方——所有改写只落在副本
+5. 结束: rm -rf "$TESTROOT"
+6. 正式仓库工作区应保持干净（git status --porcelain -uall 无新增）
+```
+
+被审对象不能被测试夹具改写——与"被审对象不能审自己"同一原理。
+
 ## 配方 1 · 正常发布预检（同号技能）
 
 ```
@@ -26,7 +45,7 @@
 4. 核: grep -c '^version:' dist/<skill>/SKILL.md  → 应为 1
 ```
 
-## 配方 2 · 漂移守卫（无声明 → FAIL）
+## 配方 2 · 漂移守卫（无声明 → FAIL）【先按"夹具隔离"建副本，在副本上跑】
 
 ```
 1. 临时把 <repo>/<skill>/SKILL.md 的 version 改为与 skills.json 不同的值（如 9.9.9）
@@ -35,7 +54,7 @@
 4. 复原 SKILL.md（还原 version 行）
 ```
 
-## 配方 3 · 有意分版（显式 --version → 放行 + WARN）
+## 配方 3 · 有意分版（显式 --version → 放行 + WARN）【同上，副本上跑】
 
 ```
 1. 同配方 2 步骤 1（制造漂移），或技能本身存在声明过的双通道分版
