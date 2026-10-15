@@ -2,8 +2,23 @@
 """规整 PDF 提取的 md v2：去页码、并断行、重排段落、拆分粘连的标题与条目。"""
 import re, sys
 
+
+def _die(msg, hint):
+    print(f"❌ {msg}")
+    print(f"💡 怎么办：{hint}")
+    sys.exit(1)
+
+
+if len(sys.argv) < 4:
+    _die("参数不足", "用法：python3 clean_md.py 输入.md 输出.md 文档标题 —— 三个参数都要给。")
+
 src, dst, title = sys.argv[1], sys.argv[2], sys.argv[3]
-text = open(src, encoding="utf-8").read()
+try:
+    text = open(src, encoding="utf-8").read()
+except FileNotFoundError:
+    _die(f"找不到文件：{src}", "确认 pdf_extract.py 已经跑过、输出路径写对了。")
+except UnicodeDecodeError:
+    _die("输入文件不是 UTF-8 文本", "clean_md 只吃 pdf_extract.py 的产物；不要直接喂原始 PDF 或其他编码文件。")
 
 lines = []
 for block in re.split(r"<!--\s*第\s*\d+\s*页\s*-->", text):
