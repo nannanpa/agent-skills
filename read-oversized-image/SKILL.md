@@ -120,3 +120,7 @@ print("页数:", doc.page_count, "尺寸:", doc[0].rect)
 - `sips` 只是 macOS 自带，跨平台时改用 Pillow 做全貌缩略。
 - 不要把超图直接丢给 `Read` 反复试，浪费轮次；先 sips 再区块化。
 - 这是**只读**操作，不改原图。
+
+---
+
+> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。

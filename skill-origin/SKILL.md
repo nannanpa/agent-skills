@@ -89,3 +89,7 @@ python3 scripts/provenance.py all --dir /path/to/你的技能目录
 - 判定阈值（1000★/100★）写在 `scripts/provenance.py` 顶部常量，可随时调
 - 新技能安装后建议跑一次：`python3 scripts/provenance.py <名称>`；全量体检跑 `all`
 - 本技能为自建（2026-10-12 由实际溯源实战固化），无上游
+
+---
+
+> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。

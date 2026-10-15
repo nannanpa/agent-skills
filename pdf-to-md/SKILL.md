@@ -108,3 +108,7 @@ python3 <本skill目录>/scripts/clean_md.py 中间产物.md 最终文件.md "�
 ## License
 
 MIT（本目录随附的 LICENSE 与仓库根目录 LICENSE 一致；单独分发本文件夹时 LICENSE 随包带走）。
+
+---
+
+> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。

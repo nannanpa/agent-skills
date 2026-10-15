@@ -101,3 +101,7 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 - **找不到锚点短语（apply 无命中）**：锚点必须与正文逐字一致（含全半角标点）。先用工具读出目标段落原文再复制短语，不要手打。
 
 现成的 WPS 安全实现见 `scripts/apply_track_changes.py`，提供 `apply(paragraph_index, anchor_phrase, insert_text)` 辅助函数。
+
+---
+
+> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。
