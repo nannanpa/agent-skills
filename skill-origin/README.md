@@ -48,4 +48,5 @@ python3 scripts/provenance.py all            # 全量体检 skills 目录
 - **2026-10-13 SkillHub 1.0.1**：补充自定义图标与"办公效率"分类（内容无变化）
 - **2026-10-13 SkillHub 1.0.0**：发布至 SkillHub 市场（@indiv-mabin/skill-origin）
 - **2026-10-15 v1.0.4（GitHub，SkillHub 同号）**：provenance.py 支持 `--dir` 自定义扫描目录；批量核验加实时进度（stderr，不污染报告）；SKILL.md 新增「对话式触发（推荐用法）」「报告长这样（真实输出）」「常见问题 FAQ」三节
+- **2026-10-15 v1.0.4（GitHub，SkillHub 同号）**：provenance.py 支持 `--dir` 自定义扫描目录；批量核验加实时进度（stderr，不污染报告）；SKILL.md 新增「对话式触发（推荐用法）」「报告长这样（真实输出）」「常见问题 FAQ」三节
 - **2026-10-12 首发**：四级判定矩阵 + provenance.py（纯标准库零依赖）+ 厂商官方档/OFFICIAL_ORGS 白名单（含一次"命名之争"：provenance 留括号，origin 占名位）

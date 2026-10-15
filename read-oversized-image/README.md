@@ -21,6 +21,7 @@
 
 - **2026-10-13 SkillHub 1.0.1**：分发侧补充自定义图标与分类标签（内容无变化）
 - **2026-10-15 v1.0.3（GitHub，SkillHub 同号）**：平台限制（sips 仅 macOS，跨平台走 Pillow）前置到 SKILL.md 开头
+- **2026-10-15 v1.0.3（GitHub，SkillHub 同号）**：平台限制（sips 仅 macOS，跨平台走 Pillow）前置到 SKILL.md 开头
 - **2026-10-15 v1.0.2（GitHub，SkillHub 同号）**：SKILL.md 新增「常见问题 FAQ」节（跨平台替代方案前置、sips 报错排查、降采样后仍失败的对策、扫描件抽字范围）
 - **2026-10-12 首发**：macOS 原生 sips 分块降采样，破解 Read 工具读超大图片的压缩失败
 

@@ -22,6 +22,7 @@ WPS 对修订 XML 极其敏感，手写的 `w:ins`/`w:del` 很容易触发"彩�
 > 本目录只保留最新版；历史版本见 git 提交记录。
 
 - **2026-10-15 v1.0.6（GitHub，SkillHub 同号）**：SKILL.md 新增「样例：一次插入前后的 XML（真实产物）」节（w:ins 结构与 author/date 直观可见）
+- **2026-10-15 v1.0.6（GitHub，SkillHub 同号）**：SKILL.md 新增「样例：一次插入前后的 XML（真实产物）」节（w:ins 结构与 author/date 直观可见）
 - **2026-10-15 v1.0.5（GitHub，SkillHub 同号）**：CLI 入口新增中文友好报错（缺参数、找不到文件、无效 docx、校验未通过逐项给出下一步动作）；SKILL.md 新增「常见问题 FAQ」节
 - **2026-10-15 SkillHub 1.0.4**：双平台交叉验证后修复——①`ensure_child` 按 CT_Settings schema 顺序找锚点插入，`w:rsidRoot` 归位到 `w:rsids` 内部（旧版误插 `w:settings` 直属位置，实测 WPS 卡死诱因）；②新增撞号修复：计数器起号取 max(10000, 文档既有修订 id 最大值)（固定 10001 在自带修订史的稿件上必然撞号，Windows 实测复现）；③`verify()` 内置 settings 结构回归断言；④新增跨平台 `scripts/self_test.py`（基础插入 + 撞号回归两场景）；⑤SKILL.md 新增"适用环境与未验证声明"与已知坑（WPS 个人版修订窗格不显示时间列）；⑥默认修订作者改为中性"审校"（脱敏补漏）。实测：Windows 10 + WPS 12.1.0.29161 self-test 一次全绿，WPS 三点检查两过一判定通过
 - **2026-10-13 SkillHub 1.0.3**：脱敏——示例句中内部文件指代改为通用表述（"规划、要点类文件"）
