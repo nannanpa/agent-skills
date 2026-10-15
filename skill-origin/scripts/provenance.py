@@ -4,6 +4,7 @@
 用法:
     python3 provenance.py <技能目录名>   # 核验单个
     python3 provenance.py all            # 全量核验 ~/.workbuddy/skills/
+    python3 provenance.py all --dir ~/my-skills   # 核验自定义目录（批量进度显示在终端）
 
 判定矩阵见 SKILL.md。纯标准库，零依赖。
 """
@@ -238,11 +239,21 @@ def audit_skill(skill_dir: Path) -> dict:
 
 
 def main():
-    arg = sys.argv[1] if len(sys.argv) > 1 else "all"
-    targets = ([SKILLS_DIR / arg] if arg != "all"
-               else sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir() and (p / "SKILL.md").exists()))
+    args = sys.argv[1:]
+    base = SKILLS_DIR
+    if "--dir" in args:  # 自定义扫描目录：all --dir /path/to/skills
+        i = args.index("--dir")
+        try:
+            base = Path(args[i + 1]).expanduser()
+        except IndexError:
+            print("❌ --dir 需要一个目录路径，例如：provenance.py all --dir ~/my-skills")
+            sys.exit(1)
+        args = args[:i] + args[i + 2:]
+    arg = args[0] if args else "all"
+    targets = ([base / arg] if arg != "all"
+               else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()))
     if not targets:
-        print(f"未找到技能: {arg}")
+        print(f"未找到技能: {arg}（扫描目录：{base}）")
         return
     if arg != "all" and not (targets[0] / "SKILL.md").exists():
         print(f"⚠ {targets[0].name} 目录下无 SKILL.md，可能不是有效技能目录")
@@ -250,7 +261,9 @@ def main():
     print(f"# 🔍 技能溯源核验报告（{len(targets)} 个）\n")
     print("| 技能 | 来源 | 上游仓库(星数) | 档位 | 建议 |")
     print("|---|---|---|---|---|")
-    for d in targets:
+    n = len(targets)
+    for i, d in enumerate(targets, 1):
+        print(f"[{i}/{n}] 核验中: {d.name} …", file=sys.stderr, flush=True)  # 进度走 stderr，不污染报告
         r = audit_skill(d)
         # 多仓库全部展示（来源优先，已在前），用 <br> 换行保证 md 表格可读
         lines = [f"{x['repo']}({x['stars']}★)" for x in r["repos"]]

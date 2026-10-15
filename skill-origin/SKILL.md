@@ -25,6 +25,9 @@ python3 scripts/provenance.py <技能目录名>
 
 # 全量核验（默认扫描 ~/.workbuddy/skills/ 下全部）
 python3 scripts/provenance.py all
+
+# 核验自定义目录（批量进度实时显示在终端，不混入报告）
+python3 scripts/provenance.py all --dir /path/to/你的技能目录
 ```
 
 ## 报告长这样（真实输出）
@@ -40,6 +43,14 @@ python3 scripts/provenance.py all
 ```
 
 （以上为实际核验输出。有上游仓库的技能会多出"上游仓库(星数)"列与 A+/A/B/C/D 档位，报告末尾附换源建议。）
+
+## 常见问题（FAQ）
+
+- **批量核验时有没有进度提示？** 有——终端会逐行显示 `[2/8] 核验中: xxx …`（走 stderr，不混进报告表格）。核验要连 GitHub，技能多时耐心等它跑完。
+- **GitHub 限流了怎么办？** 报告不会因此误判——限流时档位按"无背书"保守处理并提示稍后再试。等几分钟重跑即可；频繁使用可配置 GitHub token。
+- **厂商白名单（A+ 档的依据）怎么维护？** 在 `scripts/provenance.py` 头部的官方 org 常量里增删一行即可——上游仓库属于这些 org 才给 A+。发现新的官方 org 时欢迎提 PR。
+- **想核验别的目录（比如自己另存的技能仓库）？** 用 `all --dir 目录路径`，任意含 SKILL.md 的目录都能扫。
+- **提示"目录下无 SKILL.md"**：传入的不是有效技能目录。技能的标志是根下有 SKILL.md。
 
 ## 核验方法论（按序执行）
 
