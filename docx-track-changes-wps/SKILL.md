@@ -63,4 +63,12 @@ description: 向 .docx 文档插入真正的"修订模式"（tracked changes / r
 - `w:ins` 数量符合预期、`w:del` 为 0（只插入模式下）、`w:id` 集合唯一、每个 `w:ins` 都有 author+date+内部 `w:r`；
 - 逐个目标段落检查全文（含 `w:ins`）包含插入的关键词。
 
+## 常见问题（FAQ）
+
+- **命令行报"结构校验未通过"**：结构断言失败说明产物 XML 不合法。先跑 `scripts/self_test.py`——它全绿说明环境没问题，问题出在输入文件；再对照「彩虹圈规避清单」逐条排查。校验失败时**不要用原件重试**，另存副本再试。
+- **命令行报"不是有效的 .docx 文件"**：扩展名是 .docx 不代表内容是 OOXML（可能是 .doc/.rtf/.wps 改了后缀）。先用 WPS 打开另存为真正的 .docx。
+- **WPS 打开产物卡死（彩虹圈）**：99% 是 settings.xml 结构非法（`w:rsidRoot` 位置错误）。本 skill 的 `ensure_child` 已按 schema 顺序插入规避；如果用了旧版脚本或手写 XML，对照本文"正确启用修订"一节检查。
+- **WPS 修订窗格里看不到插入时间**：WPS 个人版窗格默认不显示时间列，属显示惯例而非数据缺失。核对时间读 XML 里的 `w:date`，或把测试件的 `w:date` 设为当天当地时刻再比对。
+- **找不到锚点短语（apply 无命中）**：锚点必须与正文逐字一致（含全半角标点）。先用工具读出目标段落原文再复制短语，不要手打。
+
 现成的 WPS 安全实现见 `scripts/apply_track_changes.py`，提供 `apply(paragraph_index, anchor_phrase, insert_text)` 辅助函数。
