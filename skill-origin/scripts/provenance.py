@@ -32,7 +32,7 @@ OFFICIAL_ORGS = {
 
 # 人工核验过的自建/改造技能名单（2026-10-12 首轮全量核验固化；新自建技能手动加进来）
 SELF_BUILT = {
-    "fgzc-zhidu", "hongloumeng", "pdf-to-md", "read-oversized-image",
+    "zhiduku", "hongloumeng", "pdf-to-md", "read-oversized-image",
     "msd-home-manual", "relation-scope", "docx-template-fill",
     "docx-track-changes-wps", "skill-origin", "maoxuan",
 }
