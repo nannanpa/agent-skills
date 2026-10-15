@@ -17,6 +17,9 @@ metadata:
 
 # 读取超大图片（展墙 / 长图 / 巨幅扫描件）
 
+> ⚠ **平台限制（先看这条）**：本技能核心工具 `sips` 是 **macOS 自带**，仅在 macOS 上开箱即用。
+> Windows / Linux 用户：分块思路不变，把 `sips` 换成 Pillow 的 `Image.thumbnail` 做全貌缩略即可，详见文末 FAQ。
+
 ## 何时用
 
 - `Read` 图片返回 `[Image too large — omitted after compression]`（工具内部压缩后仍超限）。
