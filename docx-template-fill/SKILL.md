@@ -9,6 +9,12 @@ description: 【仅限 WorkBuddy】通过本地编辑器（内置 skill tencent-
 
 配合内置 skill `tencent-local-office-edit` 的 `edsdk.py` 使用，填报上级模板（如"××方案（部门填报）"）、往既有 Word 文档插内容。**本 skill 是流程纪律，不是新工具**——工具都来自 edsdk，这里固化的是"怎么用不出事"。
 
+## 适用环境与未验证声明（诚实边界）
+
+- **实测环境**：WorkBuddy（macOS）+ 本地编辑器服务 editor_sdk（端口 39099–39108），`edsdk.py` 为该服务的 HTTP 封装。
+- **未验证**：Windows 版 WorkBuddy 的可运行性（`file` 等 POSIX 工具不可用，诊断命令需按操作纪律第 6 条替换）；其他 agent 平台不可用（无本地编辑器服务）。
+- **三坑的真实发生率**来自作者实战记录，无法离线复现；CDFV2 的"加密"表述系按现象描述（文件表现为 OLE2 复合容器、编辑器无法重开），精确机制未独立验证。
+
 ## 为什么需要这个 skill（三个实战坑）
 
 | 坑 | 后果 | 规避 |
@@ -55,7 +61,9 @@ checks = [
 ]
 for name, ok in checks:
     print(('✓' if ok else '✗'), name)
-assert all(ok for _, ok in checks), '终验未通过：✗ 项即为问题所在，勿交付'
+failed = [name for name, ok in checks if not ok]
+if failed:
+    sys.exit(f'终验未通过：{", ".join(failed)} —— ✗ 项即为问题所在，勿交付')
 print('终验通过')
 ```
 
@@ -68,7 +76,7 @@ print('终验通过')
 3. **插入内容与方面级已有描述不重复**：先读空位前后的正文，自己的条目从部门职责角度切入
 4. **坐标漂移**：多处修改时从文档尾部往前改
 5. **保存失败（文件占用）**：不要反复重试 save 到原路径——直接换 `$TMP`，走第 5-7 步
-6. **发现目标文件已是 CDFV2 加密格式**（`file` 命令显示 CDFV2 而非 Microsoft Word 2007+）：编辑器通道读不了，若内容有完整记录则从干净模板重建，坏文件移出备份
+6. **发现目标文件已是 CDFV2 加密格式**（`file` 命令显示 CDFV2 而非 Microsoft Word 2007+。`file` 为 POSIX 工具，Windows 下可改用 `certutil -dump 文件名` 看是否为 OLE2 复合文档，或直接以"编辑器能否打开"判定）：编辑器通道读不了，若内容有完整记录则从干净模板重建，坏文件移出备份
 7. **open→改→存→关必须在同一条命令链里执行**（`&&` 串联）：编辑器会话不保证跨 Bash 调用存活，跨命令续操作会报 "document is not open"；且报错回显可能滞后——**一切以 mv 后的 zip 解包终验为准**，报错后不要凭输出猜状态，先解包看内容再说
 8. **mv 前确认 `$TMP` 是本次产物**（`ls -la` 看时间戳）：目录里可能残留旧临时文件，盲目 `mv -f` 会把不知道哪个版本的文件盖到目标上
 
