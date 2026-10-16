@@ -46,11 +46,11 @@ AI：复述理解 → Q1 文种与体例（附推荐）→ 你答 → Q2 → …
 ```
 
 ## 发布记录
+- **2026-10-15 v1.0.1（GitHub + SkillHub）**：补 Matt Pocock（上游 grill-me 作者）版权行（LICENSE + SKILL.md frontmatter author 字段）；新增 UPSTREAM-MERGE.md 改造台账（上游合并规则）；SKILL.md 新增「云盘同步目录降级分支」（云盘占位文件不得误判为查无记录——多平台交叉验证实践沉淀）
+- **2026-10-12 首发**：原型（mattpocock/skills 的 grill-me，MIT）+ 高校规划材料场景 5 项改造
 
 > 本目录只保留最新版；历史版本见 git 提交记录。
 
-- **2026-10-15 v1.0.1（GitHub + SkillHub）**：补 Matt Pocock（上游 grill-me 作者）版权行（LICENSE + SKILL.md frontmatter author 字段）；新增 UPSTREAM-MERGE.md 改造台账（上游合并规则）；SKILL.md 新增「云盘同步目录降级分支」（云盘占位文件不得误判为查无记录——多平台交叉验证实践沉淀）
-- **2026-10-12 首发**：原型（mattpocock/skills 的 grill-me，MIT）+ 高校规划材料场景 5 项改造
 
 ## 分发许可
 

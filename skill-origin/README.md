@@ -38,15 +38,12 @@ python3 scripts/provenance.py all            # 全量体检 skills 目录
 任何采用 SKILL.md 格式（Agent Skills 规范）的 agent 环境，拷进技能目录即可；不依赖特定平台 API。
 
 ## 发布记录
-
-> 本目录只保留最新版；历史版本见 git 提交记录。
-
-- **2026-10-13 SkillHub 1.0.0**：发布至 SkillHub 市场（@indiv-mabin/skill-origin）
-- **2026-10-13 SkillHub 1.0.1**：补充自定义图标与"办公效率"分类（内容无变化）
+- **2026-10-15 v1.0.4（GitHub，SkillHub 同号）**：provenance.py 支持 `--dir` 自定义扫描目录；批量核验加实时进度（stderr，不污染报告）；SKILL.md 新增「对话式触发（推荐用法）」「报告长这样（真实输出）」「常见问题 FAQ」三节
 - **2026-10-13 SkillHub 1.0.3**：全文清除凭据类关键词表述——市场能力标签源于包内关键词扫描，正面声明本身也会命中（1.0.2 未消除的根因）
 - **2026-10-13 SkillHub 1.0.2**：移除提额指引与凭据相关表述
 - **2026-10-13 SkillHub 1.0.1**：补充自定义图标与"办公效率"分类（内容无变化）
 - **2026-10-13 SkillHub 1.0.0**：发布至 SkillHub 市场（@indiv-mabin/skill-origin）
-- **2026-10-15 v1.0.4（GitHub，SkillHub 同号）**：provenance.py 支持 `--dir` 自定义扫描目录；批量核验加实时进度（stderr，不污染报告）；SKILL.md 新增「对话式触发（推荐用法）」「报告长这样（真实输出）」「常见问题 FAQ」三节
-- **2026-10-15 v1.0.4（GitHub，SkillHub 同号）**：provenance.py 支持 `--dir` 自定义扫描目录；批量核验加实时进度（stderr，不污染报告）；SKILL.md 新增「对话式触发（推荐用法）」「报告长这样（真实输出）」「常见问题 FAQ」三节
 - **2026-10-12 首发**：四级判定矩阵 + provenance.py（纯标准库零依赖）+ 厂商官方档/OFFICIAL_ORGS 白名单（含一次"命名之争"：provenance 留括号，origin 占名位）
+
+> 本目录只保留最新版；历史版本见 git 提交记录。
+
