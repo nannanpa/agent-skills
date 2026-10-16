@@ -90,4 +90,4 @@ print('终验通过')
 
 ---
 
-> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。
+> 📦 **安装（SkillHub 独占）**：https://skillhub.cn/skills/indiv-mabin/docx-template-fill —— 本技能依赖 WorkBuddy 本地编辑器服务，仅经 SkillHub 分发。
