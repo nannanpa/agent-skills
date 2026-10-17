@@ -1,14 +1,14 @@
 ---
 name: relation-scope
-version: 3.3.0  
-description: 人际关系智能分析技能包（v3.3）。支持聊天记录（须先由使用者转换为可读文本）、个人日记、场景重现等多种输入，输出情感倾向、情绪分析、关系走向、行为模式识别等多维度分析报告。当用户想分析与某人的关系、读懂对方的态度、理解某段对话的深层含义、评估关系健康度时，使用此  
+version: 3.3.1  
+description: 人际关系智能分析技能包。支持聊天记录（须先由使用者转换为可读文本）、个人日记、场景重现等多种输入，输出情感倾向、情绪分析、关系走向、行为模式识别等多维度分析报告。当用户想分析与某人的关系、读懂对方的态度、理解某段对话的深层含义、评估关系健康度时，使用此  
   Skill。  
 description_zh: 人际关系智能分析（情感倾向、情绪识别、关系走向）  
 description_en: Interpersonal relationship analysis (emotional tendency, mood  
   detection, relationship dynamics)  
 ---
 
-# relation-scope · RelationScope v3.3.0.0
+# relation-scope · RelationScope v3.3.1
 
 > ## ⚠️ 输出铁律（每次输出前先过这一条）
 >
@@ -76,7 +76,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## 核心原则（v3.0 强化）
+## 核心原则
 
 - **中立客观**：分析基于用户提供的文本信号，避免主观臆断，每个结论必须有文本依据支撑。
 - **尊重隐私**：所有内容仅在用户本地会话中处理，不做任何外部传输。
@@ -93,7 +93,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## 🧭 通用分析纪律（v3.0 新增 · 核心）
+## 🧭 通用分析纪律（核心）
 
 这些纪律用于防止分析跑偏，**优先级高于任何单次解读**：
 
@@ -255,7 +255,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-### 6. 询问者自身状态（v3.0 强化 · 主体性）
+### 6. 询问者自身状态（主体性）
 
 - **在乎 ≠ 投放**：在乎 = 情感仍在；投放 = 把自我价值 / 情绪归宿寄托于对方。  
   三种形态：**投放**（索取性·需回填）、**承担**（给予性·主动负责·不求回填）、**在场**（中性关注）。
@@ -280,7 +280,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## 🧘 策略模块：等字诀（v3.0 新增）
+## 🧘 策略模块：等字诀
 
 > **来源标注（分层）：A 类 · 概念本体 ＋ B 类 · 机制抽象**
 >
@@ -301,7 +301,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## ⚖️ 双轨模型（v3.0 新增）
+## ⚖️ 双轨模型
 
 > **来源标注：B 类 · AI 自建（有限样本归纳的描述性模型）** —— 素材来自使用者自陈，**命名与抽象由 AI 完成**；它解释的是**特定个案的结构**，不是普遍规律。应用于他人前须先验证其公私域切分是否成立，**不成立即弃用**。
 
@@ -311,7 +311,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## 🔩 行为模式模块：单向阀 / 做而不述（v3.0 新增）
+## 🔩 行为模式模块：单向阀 / 做而不述
 
 这两条出自同一批行为证据的两次归纳，粒度不同：**单向阀是合并抽象（看结构），做而不述是单条规则（看动作）**。
 
@@ -344,7 +344,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 
 ---
 
-## 🗂️ 关系档案维护（v3.0 新增）
+## 🗂️ 关系档案维护
 
 - 建议按**日期增量**维护关系档案（一天一记，不积压）。积压会导致连环误读。
 - 每条记录应包含：**事实（含说话人标注）+ 判读 + 置信度**。
@@ -352,7 +352,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 - 档案是**校准工具，不是证据库**：允许留白，不追溯考据。
 - 定期做多日综合判读时，区分「已确认事实」与「推断」，不要把推断沉淀成事实。
 
-### 📦 深度模块库（v3.2 新增 · 按需加载）
+### 📦 深度模块库（按需加载）
 
 以下需求读取本目录下 **EXTENSIONS.md** 的对应模块（加载索引见该文件末尾）：
 
@@ -450,4 +450,11 @@ Step 5：（可选）将结论按「关系档案维护」规范增量归档
 
 ---
 
-*relation-scope v3.3.0 · 通用方法论 · 可持续扩展*
+## 安装与源码
+
+- 📦 **SkillHub 安装（国内直连，一键安装）**：https://skillhub.cn/skills/indiv-mabin/relation-scope
+- 🧬 **源码开源（GitHub · agent-skills，MIT）**：https://github.com/nannanpa/agent-skills
+
+---
+
+*relation-scope v3.3.1 · 通用方法论 · 可持续扩展*
