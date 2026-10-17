@@ -8,7 +8,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
   detection, relationship dynamics)  
 ---
 
-# relation-scope · RelationScope v3.3.0
+# relation-scope · RelationScope v3.3.0.0
 
 > ## ⚠️ 输出铁律（每次输出前先过这一条）
 >
