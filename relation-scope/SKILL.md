@@ -1,5 +1,6 @@
 ---
-name: relation-scope  
+name: relation-scope
+version: 3.3.0  
 description: 人际关系智能分析技能包（v3.3）。支持聊天记录（须先由使用者转换为可读文本）、个人日记、场景重现等多种输入，输出情感倾向、情绪分析、关系走向、行为模式识别等多维度分析报告。当用户想分析与某人的关系、读懂对方的态度、理解某段对话的深层含义、评估关系健康度时，使用此  
   Skill。  
 description_zh: 人际关系智能分析（情感倾向、情绪识别、关系走向）  
@@ -7,7 +8,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
   detection, relationship dynamics)  
 ---
 
-# relation-scope · RelationScope v3.3
+# relation-scope · RelationScope v3.3.0
 
 > ## ⚠️ 输出铁律（每次输出前先过这一条）
 >
@@ -449,4 +450,4 @@ Step 5：（可选）将结论按「关系档案维护」规范增量归档
 
 ---
 
-*relation-scope v3.3 · 通用方法论 · 可持续扩展*
+*relation-scope v3.3.0 · 通用方法论 · 可持续扩展*
