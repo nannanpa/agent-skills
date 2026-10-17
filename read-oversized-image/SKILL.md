@@ -1,11 +1,6 @@
 ---
 name: read-oversized-image
-description: |
-  读取超大图片（展墙、测绘长图、海报、扫描件、工地/园区全景等，像素数超百万级）时使用。
-  当 Read 报 "Image too large — omitted after compression" 或 PIL 抛 DecompressionBombError 时，
-  用 macOS 原生 sips 缩略出全貌，再用 Pillow 的 draft 模式降解码分辨率 + 分块裁切放大，
-  逐块读清细节文字。适用于需要从巨幅图里精确抄录文字（如展板、图纸标注、坐标表格）的场景。
-  另含"扫描件/图片型 PDF"场景：pypdf 抽不到文字时，用 PyMuPDF(fitz) 把每页渲染成 PNG 再读。
+description: 读取超大图片（展墙、测绘长图、海报、扫描件、工地/园区全景等，像素数超百万级）时使用。当 Read 报 "Image too large — omitted after compression" 或 PIL 抛 DecompressionBombError 时，用 macOS 原生 sips 缩略出全貌，再用 Pillow 的 draft 模式降解码分辨率 + 分块裁切放大，逐块读清细节文字。适用于需要从巨幅图里精确抄录文字（如展板、图纸标注、坐标表格）的场景。另含"扫描件/图片型 PDF"场景：pypdf 抽不到文字时，用 PyMuPDF(fitz) 把每页渲染成 PNG 再读。
 allowed-tools:
   - Read
   - Bash
@@ -16,9 +11,6 @@ metadata:
 ---
 
 # 读取超大图片（展墙 / 长图 / 巨幅扫描件）
-
-> ⚠ **平台限制（先看这条）**：本技能核心工具 `sips` 是 **macOS 自带**，仅在 macOS 上开箱即用。
-> Windows / Linux 用户：分块思路不变，把 `sips` 换成 Pillow 的 `Image.thumbnail` 做全貌缩略即可，详见文末 FAQ。
 
 ## 何时用
 
@@ -44,8 +36,8 @@ sips -g pixelWidth -g pixelHeight "<原图路径>"
 ### 3. 备好 Pillow（首次）
 管理版 Python 的隔离 venv（勿污染全局）：
 ```bash
-~/.workbuddy/binaries/python/versions/<版本号>/bin/python3 -m venv ~/.workbuddy/binaries/python/envs/default 2>/dev/null
-~/.workbuddy/binaries/python/envs/default/bin/pip install -q Pillow
+/Users/mabin/.workbuddy/binaries/python/versions/3.13.12/bin/python3 -m venv /Users/mabin/.workbuddy/binaries/python/envs/default 2>/dev/null
+/Users/mabin/.workbuddy/binaries/python/envs/default/bin/pip install -q Pillow
 ```
 
 ### 4. 降解码分辨率 + 分块裁切放大（核心）
@@ -88,7 +80,7 @@ save((0.35, 0.10, 0.56, 0.55), "/tmp/e1.jpg")   # 中上细节
 
 解法：用 **PyMuPDF** 把每页渲染成 PNG，再按第 4/5 步读图（比 pypdf 可靠，无需 poppler）：
 ```bash
-~/.workbuddy/binaries/python/envs/default/bin/pip install -q PyMuPDF
+/Users/mabin/.workbuddy/binaries/python/envs/default/bin/pip install -q PyMuPDF
 ```
 ```python
 import fitz, os                       # 老版包名 fitz；新版可 import pymupdf
@@ -105,14 +97,6 @@ print("页数:", doc.page_count, "尺寸:", doc[0].rect)
 - 跨页表格、页眉页脚会重复出现，注意去重。
 - 同族用途：`.docx` 抽不到内容时，也可先转 PDF 再渲染（docx→pdf→png）。
 
-## 常见问题（FAQ）
-
-- **本 skill 只在 macOS 上成立吗？**：是。核心工具 `sips` 是 macOS 自带；Windows/Linux 用户请改用 Pillow（`Image.thumbnail` 做全貌缩略），分块思路不变、换实现即可。
-- **sips 报错或提示内存不足**：多为源图过大或格式特殊（如 16-bit TIFF）。先转成普通 PNG/JPG 再走降采样流程。
-- **降采样后 Read 还是失败**：检查产物尺寸是否真的变小（`sips -g pixelWidth` 确认）；仍失败说明单块还是太大，把切块粒度再调小（宁多勿大）。
-- **扫描件 PDF 末几页抽不出字**：文字层可能只覆盖部分页。用"先读末 2~3 页定位"的技巧确认有字层的页码范围，只对有字层的页做提取。
-- **不要拿原图反复试 Read**：超大图每试一次都浪费轮次，按流程先降采样再分块，一次到位。
-
 ## 注意
 
 - 比例坐标会因 `draft` 缩放而变，但**分数比例不变**，所以 frac 可直接复用。
@@ -120,7 +104,3 @@ print("页数:", doc.page_count, "尺寸:", doc[0].rect)
 - `sips` 只是 macOS 自带，跨平台时改用 Pillow 做全貌缩略。
 - 不要把超图直接丢给 `Read` 反复试，浪费轮次；先 sips 再区块化。
 - 这是**只读**操作，不改原图。
-
----
-
-> 📦 **获取最新版**：https://github.com/nannanpa/agent-skills/releases —— 本技能在 GitHub 与 SkillHub **同号发布**，Release 附件可下载任意历史版本。
