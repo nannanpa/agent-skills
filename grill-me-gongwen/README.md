@@ -46,6 +46,7 @@ AI：复述理解 → Q1 文种与体例（附推荐）→ 你答 → Q2 → …
 ```
 
 ## 发布记录
+- **2026-10-17 v1.1.0（GitHub，SkillHub 同号）**：按 TRACE 首评（4.6 优秀）补齐低分项——新增「纠偏与恢复」节（理解偏差三类处置预案，对应异常处理/运行稳定性）、「常见问题 FAQ」节（反模式与FAQ 3.8 最低项）、第二类场景提问示例（制度修订类）；方法论与触发词无变化
 - **2026-10-15 v1.0.1（GitHub + SkillHub）**：补 Matt Pocock（上游 grill-me 作者）版权行（LICENSE + SKILL.md frontmatter author 字段）；新增 UPSTREAM-MERGE.md 改造台账（上游合并规则）；SKILL.md 新增「云盘同步目录降级分支」（云盘占位文件不得误判为查无记录——多平台交叉验证实践沉淀）
 - **2026-10-12 首发**：原型（mattpocock/skills 的 grill-me，MIT）+ 高校规划材料场景 5 项改造
 
