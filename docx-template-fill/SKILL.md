@@ -12,7 +12,8 @@ description: 【仅限 WorkBuddy】通过本地编辑器（内置 skill tencent-
 ## 适用环境与未验证声明（诚实边界）
 
 - **实测环境**：WorkBuddy（macOS）+ 本地编辑器服务 editor_sdk（端口 39099–39108），`edsdk.py` 为该服务的 HTTP 封装。
-- **未验证**：Windows 版 WorkBuddy 的可运行性（`file` 等 POSIX 工具不可用，诊断命令需按操作纪律第 6 条替换）；其他 agent 平台不可用（无本地编辑器服务）。
+- **Windows 已实测**（2026-10-18，Windows 10 19045 + PowerShell 5.1 + Python 3.13 venv，editor_sdk 同样监听 39099）：7 步流程、终验脚本、替代命令全部跑通；平台差异见"Windows 环境对照"与三坑表注记。
+- **仍未验证**：其他 agent 平台不可用（无本地编辑器服务）。
 - **三坑的真实发生率**来自作者实战记录，无法离线复现；CDFV2 的"加密"表述系按现象描述（文件表现为 OLE2 复合容器、编辑器无法重开），精确机制未独立验证。
 
 ## 首次使用：最小路径（30 秒上手）
@@ -29,9 +30,9 @@ description: 【仅限 WorkBuddy】通过本地编辑器（内置 skill tencent-
 
 | 坑 | 后果 | 规避 |
 |---|---|---|
-| save_file 直存原路径 | 可能写成加密 CDFV2 格式，连编辑器自己都无法重新打开，只能重建 | **永远存到临时路径**，关闭后 mv 覆盖 |
-| open_file 不等待 | 后续 doc_find 全部落空、看似空文档 | open_file 必须带 `--json '{"wait":true}'` |
-| 文件被预览占用后重开编辑器 | 编辑器从磁盘载回旧版，改动被静默冲掉 | 改完立即走"存tmp→close→mv"，不重开 |
+| save_file 直存原路径 | **macOS 侧坑**：可能写成加密 CDFV2 格式，连编辑器自己都无法重新打开，只能重建。Windows 实测未复现（直存正常） | **永远存到临时路径**，关闭后 mv/move 覆盖——Windows 下 move 可能因占用失败，见坑三注记 |
+| open_file 不等待 | 后续 doc_find 全部落空、看似空文档。Windows 小文件实测可能侥幸命中——**不可依赖** | open_file 必须带 `--json '{"wait":true}'` |
+| 文件被预览占用后重开编辑器 | 编辑器从磁盘载回旧版，改动被静默冲掉。**Windows 同样掉坑且更隐蔽**：占用时 Move-Item 覆盖失败，若用 `;` 串联，失败被吞掉→静默丢改动 | 改完立即走"存tmp→close→mv/move"，不重开；**Windows 覆盖后必须验证退出状态** |
 
 ## 标准流程（7 步，一步不省）
 
@@ -95,7 +96,7 @@ print('终验通过')
 4. **坐标漂移**：多处修改时从文档尾部往前改
 5. **保存失败（文件占用）**：不要反复重试 save 到原路径——直接换 `$TMP`，走第 5-7 步
 6. **发现目标文件已是 CDFV2 加密格式**（`file` 命令显示 CDFV2 而非 Microsoft Word 2007+。`file` 为 POSIX 工具，Windows 下可改用 `certutil -dump 文件名` 看是否为 OLE2 复合文档，或直接以"编辑器能否打开"判定）：编辑器通道读不了，若内容有完整记录则从干净模板重建，坏文件移出备份
-7. **open→改→存→关必须在同一条命令链里执行**（`&&` 串联）：编辑器会话不保证跨 Bash 调用存活，跨命令续操作会报 "document is not open"；且报错回显可能滞后——**一切以 mv 后的 zip 解包终验为准**，报错后不要凭输出猜状态，先解包看内容再说
+7. **open→改→存→关必须在同一条命令链里执行**（`&&` 串联）：编辑器会话不保证跨 Bash 调用存活，跨命令续操作会报 "document is not open"；且报错回显可能滞后——**一切以 mv 后的 zip 解包终验为准**，报错后不要凭输出猜状态，先解包看内容再说。**Windows 分支**：PS 5.1 不认 `&&`（整行 parse error），改用 `;` 时 move 等关键步骤后必须验证退出状态（`;` 不短路，失败会静默继续）
 8. **mv 前确认 `$TMP` 是本次产物**（`ls -la` 看时间戳）：目录里可能残留旧临时文件，盲目 `mv -f` 会把不知道哪个版本的文件盖到目标上
 
 ## 异常分级诊断（出了问题先对号，再动手）
@@ -110,22 +111,25 @@ print('终验通过')
 | 终验 ✗ 旧内容未清零 | doc_replace 的 ranges 没对准（坐标漂移） | 重跑 doc_find 拿新 ranges，从后往前再替换 |
 | 打开报错/文件打不开，`file` 显示 CDFV2 | 保存环节写坏（三坑之一） | 编辑器读不了；有记录就从干净模板重建，坏文件移出备份 |
 | mv 后模板原件"变了" | F 定义错了（把原件当 F） | **不可逆**。教训：F 必须是另存出的填报版；平时留 `.bak-时间戳` 可救 |
+| **Windows** move 报"当文件已存在时，无法创建该文件" | 目标被占用（预览/杀毒/索引） | 释放占用后重试 Move-Item；**禁止用 `;` 把 move 和后续步骤串一起**（失败被吞＝静默丢改动） |
+| **Windows** 整条命令报 parse error（"&&"不是有效语句分隔符） | PS 5.1 不支持 `&&` | 改用 `;`（不短路）或装 PowerShell 7；注意 parse error 时**整行都不执行** |
+| **Windows** doc_find_and_replace 报 -32603 missing required param | 参数名写错：是 `old_text`/`new_text`，不是 `text` | 按 schema（`$ED schema doc_find_and_replace`）核对参数名 |
 
 每格处置动作在上文都有对应纪律条目——先对号，再跳转，不要凭输出猜状态。
 
-## Windows 环境对照
+## Windows 环境对照（已实测 2026-10-18）
 
-本技能按 macOS（WorkBuddy 实测环境）编写；Windows 版 WorkBuddy 的编辑器服务可运行性**未实测**（见诚实边界）。以下对照供 Windows 用户替换命令，免于另查资料：
+实测环境：Windows 10 19045 + PowerShell 5.1.19041 + Python 3.13，editor_sdk 同样监听 39099。**7 步流程、终验脚本、下表替代命令全部跑通。**
 
-| 用途 | macOS（本技能默认） | Windows 替代 |
+| 用途 | macOS（本技能默认） | Windows 替代（✓ 已实测） |
 |---|---|---|
-| 判定文件是否 CDFV2/OLE2 加密 | `file 目标.docx` | `certutil -dump 目标.docx`（看是否 OLE2 复合文档） |
-| 临时文件覆盖目标 | `mv -f "$TMP" "$F"` | `move /y %TMP% %F%`（CMD）或 `Move-Item -Force`（PowerShell） |
-| 多命令串联（open→改→存→关一条链） | `&&` | PowerShell 7+ 支持 `&&`；Windows PowerShell 5 用 `;`（注意：`;` 不短路，失败也会继续，需自行检查上一步退出码） |
-| 备份 | `cp "$F" "$F.bak-时间戳"` | `copy %F% %F%.bak-%时间戳%` |
-| 终验脚本 | `python3 scripts/final_check.py …`（系统自带 python3） | `python scripts/final_check.py …`（需已装 Python） |
+| 判定文件是否 CDFV2/OLE2 加密 | `file 目标.docx` | `certutil -dump 目标.docx`——正常 docx 首行是 zip 头 `50 4b 03 04`（PK），OLE2 加密文件无 PK 头，可据此区分 |
+| 临时文件覆盖目标 | `mv -f "$TMP" "$F"` | `Move-Item -Force %TMP% %F%`——⚠️ **文件被占用时会失败**，失败若被 `;` 吞掉＝静默丢改动（实测坑三），**覆盖后必须验证退出状态** |
+| 多命令串联（open→改→存→关一条链） | `&&` | ⚠️ **PS 5.1 里 `&&` 是整行 parse error**（前面语句也不会跑）——禁用；用 `;` 则不短路，move 等关键步骤后必须检查 |
+| 备份 | `cp "$F" "$F.bak-时间戳"` | `Copy-Item %F% %F%.bak-时间戳` |
+| 终验脚本 | `python3 scripts/final_check.py …` | `python scripts/final_check.py …`（✓ Python 3.13 实测正常） |
 
-**诚实声明**：上表替代命令为标准 Windows 工具语法，但整条流程在 Windows 上**未端到端实测**——首跑请先用无关紧要的测试文件走一遍 7 步，确认编辑器服务行为一致后再上真任务。
+**Windows 纪律补充**：①禁用 `&&`（PS5.1 整行炸）②move 之后必须验证（占用失败+分号吞错＝坑三放大器）③直存原路径在 Windows 不产生坏文件，但流程纪律不变——跨平台保持同一套习惯，不赌平台差异。
 
 ## 模板结构排查速查
 
