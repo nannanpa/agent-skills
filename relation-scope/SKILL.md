@@ -1,13 +1,13 @@
 ---
 name: relation-scope
-version: 3.3.5  
-description: 多场景人际关系分析——职场同事、家人、朋友、合作方，不限恋爱。方法论源自长期真实关系语料的投喂与自我解剖复盘，不是理论拼装。独有能力：量化节奏数据（谁先发起比例、回应延迟分布）、置信度纪律（单条证据不足不下结论）、记录与补述分离、跨会话关系档案。支持微信多选消息转发（≤100 条 zip 直达）、聊天记录文本、日记、场景重现四种输入。用于读懂对方态度、评估关系走向、复盘关键对话。
+version: 3.3.6  
+description: 多场景人际关系分析——职场同事、家人、朋友、合作方、恋人。方法论源自长期真实关系语料的投喂与自我解剖复盘，不是理论拼装。独有能力：量化节奏数据（谁先发起比例、回应延迟分布）、置信度纪律（单条证据不足不下结论）、记录与补述分离、跨会话关系档案。支持微信多选消息转发（≤100 条 zip 直达）、聊天记录文本、日记、场景重现四种输入。用于读懂对方态度、评估关系走向、复盘关键对话。
 description_zh: 人际关系智能分析（情感倾向、情绪识别、关系走向）  
 description_en: Interpersonal relationship analysis (emotional tendency, mood  
   detection, relationship dynamics)  
 ---
 
-# relation-scope · RelationScope v3.3.5
+# relation-scope · RelationScope v3.3.6
 
 > ## ⚠️ 输出铁律（每次输出前先过这一条）
 >
@@ -471,4 +471,4 @@ Step 5：（可选）将结论按「关系档案维护」规范增量归档
 
 ---
 
-*relation-scope v3.3.5 · 通用方法论 · 可持续扩展*
+*relation-scope v3.3.6 · 通用方法论 · 可持续扩展*
