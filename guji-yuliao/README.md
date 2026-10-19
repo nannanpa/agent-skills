@@ -13,11 +13,18 @@
 
 内置产出：分册 txt＋回目索引.md＋_manifest.json。断言失败零产物退出，不会写半个坏目录。
 
+## 源码
+
+GitHub：https://github.com/nannanpa/agent-skills/tree/main/guji-yuliao ——Issue/PR 欢迎。
+
 ## 安装
 
 把 `guji-yuliao/` 放进宿主技能根目录（如 `~/.workbuddy/skills/`）。依赖 python3；`--t2s` 需 `pip install opencc-python-reimplemented`。Windows/macOS/Linux 通用（Windows 10＋Python 3.13 实测通过）。
 
 ## 发布记录
+
+- 1.0.1（2026-10-19）补 GitHub 源码仓库引流；内容与 1.0.0 相同
+- 1.0.0（2026-10-19）首发定版（0.1.x 开发期号升位；0.1.2 为平台图标补丁版）
 
 - 1.0.0（2026-10-19）首发定版（0.1.x 开发期号升位；0.1.2 为平台图标补丁版）
 - 0.1.1（2026-10-19）修三处：章回行短前缀容忍＋"回"后分隔符闸（防首回静默丢失，Windows 实测回函必修项）；probe 期望值预警（exit 2）；build_json 缺 opencc 硬报错。分册标题补零统一。

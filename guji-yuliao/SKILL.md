@@ -1,7 +1,7 @@
 ---
 name: guji-yuliao
 displayName: 古籍语料入库器
-version: "1.0.0"
+version: "1.0.1"
 description: "把公版章回体古籍（如 Project Gutenberg 电子版）转成按章回分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。当用户要为《三国演义》《西游记》《水浒传》等古籍建原文语料库、或说'把某本古籍入库/做成语料技能'时使用。与 book-to-skill 平行——book-to-skill 提炼方法论结构，本技能保原文全本。不依赖特定平台。"
 ---
 
@@ -89,6 +89,9 @@ python scripts/build_json.py --src zizhi.json --dst refs/白文本_简体 \
 1. **Gutenberg 纯文本源** → `scripts/build_split.py`（章回体：第X回＋回目）；
 2. **JSON 记录列表源**（如 gujilab/chinese-classical-corpus，派生数据 CC0）→ `scripts/build_json.py`：字段可映射（volume/title/content）、`--strip-brackets` 剥【】夹注（另存注本）、`--title-override` 修源数据缺漏、卷首样板行剥离、按纪/类分组索引。
    - 古籍 OCR 源教训：元数据不可信（period 空缺/污染、记/纪形近异文），标题必须过正文验证，override 表手工修平。
+
+## 源码仓库
+GitHub：https://github.com/nannanpa/agent-skills/tree/main/guji-yuliao （Issue/PR 欢迎）
 
 ## 跨宿主说明（信息性）
 依赖：python3；`--t2s` 需 opencc（`pip install opencc-python-reimplemented`）。产物为纯文本分册＋md 索引，任何支持技能目录的宿主可用；Windows/macOS/Linux 通用（Windows 10 实测通过）。

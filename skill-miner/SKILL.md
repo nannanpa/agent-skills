@@ -1,7 +1,7 @@
 ---
 name: skill-miner
 displayName: 技能孵化器
-version: "1.0.1"
+version: "1.0.2"
 description: "从你与 AI 助手的日常任务记录中，发现并提炼可复用的技能（Skill）候选。当用户问'我让你帮我完成的任务里，能不能提炼一个或多个 skill？''最近哪些工作值得做成技能？''把这些重复流程固化下来'或类似表述时使用。适用于 Claude Code、Copilot CLI、OpenCode、WorkBuddy 等任何支持 Skill 机制的宿主；不依赖特定平台，产出符合通用 SKILL.md 规范的候选提案与技能骨架。"
 ---
 
@@ -124,7 +124,10 @@ description: "从你与 AI 助手的日常任务记录中，发现并提炼可�
 - **"扫描完说没有候选，是不是白跑了？"**——不是。"本周无可孵化候选"是合格产出，说明判据在工作；不要为了"有产出"硬凑候选。
 - **"想中途停下怎么办？"**——任意一步说停就停：第 2 步前停下=什么都没建，零残留；已建档的想撤销，删目录即回滚。
 
+## 源码仓库
+GitHub：https://github.com/nannanpa/agent-skills/tree/main/skill-miner （Issue/PR 欢迎）
+
 ## 跨宿主说明（信息性）
 
-- 兼容技能根目录：Claude Code（~/.claude/skills）、Copilot CLI（~/.copilot/skills 或 ~/.agents/skills）、OpenCode（~/.config/opencode/skills）、WorkBuddy（~/.workbuddy/skills）等，以实际宿主文档为准；
+- 兼容技能根目录：Claude Code（~/.claude/skills）、Codex（路径以其文档为准）、Copilot CLI（~/.copilot/skills 或 ~/.agents/skills）、OpenCode（~/.config/opencode/skills）、WorkBuddy（~/.workbuddy/skills）等，以实际宿主文档为准；
 - 本技能只依赖"读取会话/笔记文本"与"写文件"两项基础能力，不要求 shell、网络或特定 MCP；纯文档实现，Windows/macOS/Linux 通用。
