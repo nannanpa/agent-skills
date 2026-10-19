@@ -16,6 +16,10 @@
 
 把 `skill-miner/` 目录放进你的宿主技能根目录即可（如 Claude Code `~/.claude/skills/`、WorkBuddy `~/.workbuddy/skills/`）。纯文档实现，零依赖，Windows/macOS/Linux 通用。
 
+## 发布记录
+
+- 1.0.0（2026-10-19）首发导入：三判据扫描、一页纸提案、偏差处置预案、两类场景示例＋反例、FAQ、选址＋脱敏双安全阀。
+
 ## 状态
 
 v1.0.0 · 开源发布（GitHub / SkillHub）。
