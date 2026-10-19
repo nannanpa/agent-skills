@@ -1,6 +1,6 @@
 ---
 name: read-oversized-image
-description: 读取超大图片（展墙、测绘长图、海报、扫描件、工地/园区全景等，像素数超百万级）时使用。当 Read 报 "Image too large — omitted after compression" 或 PIL 抛 DecompressionBombError 时，用 macOS 原生 sips 缩略出全貌，再用 Pillow 的 draft 模式降解码分辨率 + 分块裁切放大，逐块读清细节文字。适用于需要从巨幅图里精确抄录文字（如展板、图纸标注、坐标表格）的场景。另含"扫描件/图片型 PDF"场景：pypdf 抽不到文字时，用 PyMuPDF(fitz) 把每页渲染成 PNG 再读。
+description: 读取超大图片（展墙、测绘长图、海报、扫描件、工地/园区全景等，像素数超百万级）时使用，macOS 与 Windows 均已实测。触发：Read 报 "Image too large" 或 PIL 抛 DecompressionBombError；注意 Windows 版 Read 可能不报错直接吞下大图——超过约 2000 万像素就主动走本流程，不要等报错。方法：sips（macOS）或 Pillow draft 模式（Windows 已实测）缩略出全貌定位，再分块裁切放大，逐块读清细节文字。适用于需要从巨幅图里精确抄录文字（如展板、图纸标注、坐标表格）的场景。另含"扫描件/图片型 PDF"场景：pypdf 抽不到文字时，用 PyMuPDF(fitz) 把每页渲染成 PNG 再读。
 allowed-tools:
   - Read
   - Bash
@@ -20,13 +20,29 @@ metadata:
 
 典型尺寸：如 `28800 × 13319`（约 3.8 亿像素，展墙 6790×3140mm 打印稿）。
 
+**⚠ Windows 触发差异（2026-10-19 实测）**：Windows 版 Read 对超大图**可能不报任何错**——实测 20000×15000（3 亿像素）被直接读出并整体展示，无 "Image too large"、无 DecompressionBomb。因此**不能依赖"Read 先报错"再启动本流程**：像素数超过约 2000 万（20 MP）就主动按本流程走，用 Pillow 预检尺寸而不是等工具报错。
+
 ## 步骤
 
-### 1. 先出全貌（sips，macOS 原生，最快）
+### 1. 先出全貌（定位用，别指望看清小字）
+
+**macOS（sips，最快）**：
 ```bash
 sips -Z 1600 "<原图路径>" --out "/tmp/overview.jpg"
 ```
-然后 `Read /tmp/overview.jpg`。`-Z` 是长边缩到该值。全貌用于**定位**（哪块面板、哪个区域有目标内容），别指望看清小字。
+
+**Windows（无 sips，用 Pillow，已实测 ~0.4s）**：
+```python
+from PIL import Image
+Image.MAX_IMAGE_PIXELS = None        # 处理超大图前先解除保护
+img = Image.open("<原图路径>")
+img.draft("RGB", (1600, 1200))       # JPEG 抽稀解码；PNG 用 thumbnail
+img.thumbnail((1600, 1200))
+img.save("overview.png")
+print(img.size)
+```
+
+然后 `Read` 全貌图。全貌用于**定位**（哪块面板、哪个区域有目标内容），别指望看清小字——实测 160px 字号缩到 1600 宽后仍可辨认，但以实测为准。
 
 ### 2. 取原始像素尺寸
 ```bash
@@ -97,10 +113,24 @@ print("页数:", doc.page_count, "尺寸:", doc[0].rect)
 - 跨页表格、页眉页脚会重复出现，注意去重。
 - 同族用途：`.docx` 抽不到内容时，也可先转 PDF 再渲染（docx→pdf→png）。
 
+## Windows 环境对照（已实测 2026-10-19）
+
+实测环境：Windows 10 + WorkBuddy Windows 客户端 + 托管 Python 3.13 + Pillow 13.0.0。测试图 20000×15000（3 亿像素，预埋 20 个标记文字）。
+
+| 用途 | macOS | Windows（✓ 已实测） |
+|---|---|---|
+| 全貌缩略 | `sips -Z 1600` | Pillow `draft("RGB",(1600,1200))` + `thumbnail((1600,1200))`——约 0.4 s，版面完整、标记可辨、大字号仍可读 |
+| 分块裁切放大 | 同一 Pillow 脚本 | `img.crop(box).resize(...)`——实测逐字读出预埋标记，全流程（缩略+4 裁切）≈ 0.8 s |
+| Read 对大图 | 报 "Image too large" | **可能不报错直接吞下**（3 亿像素直读可行）——按像素门限（约 20 MP）主动走本流程 |
+| DecompressionBomb | Pillow 默认阈值 | 同：默认上限 89,478,485 像素，2 倍（178,956,970）即硬报错且在 `open()` 阶段抛出——处理前先设 `Image.MAX_IMAGE_PIXELS = None` |
+| 计时参考 | — | 0.8 s 为扁平测试图；真实照片类大图解码更慢，写预期时注明素材类型 |
+
+**实测注意事项**：①纯色扁平图 PNG 压缩后体积可能远小于预期（3 亿像素仅 0.9 MB）——若需卡体积阈值，测试图应掺噪声或用照片素材 ②大文件先目检 `overview` 再分块，别盲目全图精读。
+
 ## 注意
 
 - 比例坐标会因 `draft` 缩放而变，但**分数比例不变**，所以 frac 可直接复用。
 - 裁切块别太大（>2000px 宽容易又触发 Read 限制）；宁可多切几块。
-- `sips` 只是 macOS 自带，跨平台时改用 Pillow 做全貌缩略。
-- 不要把超图直接丢给 `Read` 反复试，浪费轮次；先 sips 再区块化。
+- `sips` 只是 macOS 自带；Windows 用 Pillow（命令见"Windows 环境对照"，已实测）。
+- 不要把超图直接丢给 `Read` 反复试，浪费轮次；macOS 先 sips、Windows 先 Pillow 缩略，再区块化。（Windows 上 Read 可能不报错直接吞下，但会烧上下文——同样按门限主动走流程。）
 - 这是**只读**操作，不改原图。
