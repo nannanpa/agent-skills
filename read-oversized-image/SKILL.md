@@ -1,5 +1,6 @@
 ---
 name: read-oversized-image
+version: "1.0.6"
 description: 读取超大图片（展墙、测绘长图、海报、扫描件、工地/园区全景等，像素数超百万级）时使用，macOS 与 Windows 均已实测。触发：Read 报 "Image too large" 或 PIL 抛 DecompressionBombError；注意 Windows 版 Read 可能不报错直接吞下大图——超过约 2000 万像素就主动走本流程，不要等报错。方法：sips（macOS）或 Pillow draft 模式（Windows 已实测）缩略出全貌定位，再分块裁切放大，逐块读清细节文字。适用于需要从巨幅图里精确抄录文字（如展板、图纸标注、坐标表格）的场景。另含"扫描件/图片型 PDF"场景：pypdf 抽不到文字时，用 PyMuPDF(fitz) 把每页渲染成 PNG 再读。
 allowed-tools:
   - Read
