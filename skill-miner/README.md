@@ -22,10 +22,11 @@ GitHub：https://github.com/nannanpa/agent-skills/tree/main/skill-miner ——Is
 
 ## 发布记录
 
+- 1.0.3（2026-10-19）SKILL.md 补触发说法示例与降级处理、技术面异常处置表（首评实用性低分项针对性补强）
 - 1.0.2（2026-10-19）补 GitHub 源码仓库引流；内容与 1.0.1 相同
 - 1.0.1（2026-10-19）SkillHub 实际首发版本号（1.0.0 发布通道报错误判顺延；已过科恩/云鼎安全审核）
 - 1.0.0（2026-10-19）首发导入
 
 ## 状态
 
-v1.0.0 · 开源发布（GitHub / SkillHub）。
+v1.0.3 · 开源发布（GitHub / SkillHub）· SkillHub 首评 4.5。
