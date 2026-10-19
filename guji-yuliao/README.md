@@ -1,28 +1,73 @@
 # guji-yuliao（古籍语料入库器）
 
-把公版古籍转成按章回/卷分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。与 book-to-skill 平行——book-to-skill 提炼方法论结构，本技能保原文全本。
+把公版古籍转成按章回/卷分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。两条命令（探测＋入库），断言失败零产物退出。
 
-## 它解决什么
+## 这是什么
 
-为古籍建"可检索、可引用核对"的原文语料库，手工要做：找底本→繁转简→按回切分→建索引→核对版本指纹。每本书重复一遍，且坑密（BOM、数字写法三态、静默截断、OCR 元数据污染、章回行格式变体）。guji-yuliao 把它压成两条命令：探测（probe）＋入库（build）。
+给 AI 宿主（WorkBuddy、Claude 等支持技能目录的环境）建古籍**原文语料库**的工具。为《三国演义》《资治通鉴》这类书建"可检索、可引用核对"的库，手工要做：找底本→繁转简→按回切分→建索引→核对版本指纹，每本书重复一遍，且坑密（BOM、数字写法三态、静默截断、OCR 元数据污染、章回行格式变体）。guji-yuliao 把这套流程压成两条命令，坑位内建处理。
+
+## 适合谁 / 不适合谁
+
+**适合**：想为公版章回体小说（三国/西游/水浒/红楼）或编年体史书（资治通鉴）建原文库、做引用核对、给 AI 配古籍语料的人；底本是 Gutenberg 纯文本或 JSON 记录列表。
+
+**不适合**：只想提炼一本书的方法论（用 book-to-skill）；现代有版权的校注本（版权关：拒收或仅私用且永不发布）；单篇长文存档（直接存即可）。
+
+## 快速开始
+
+```
+# 1. 探测：看回数、首末回目，核对版本指纹（必做，exit 0 才继续）
+python scripts/build_split.py --src 底本.txt --probe --chapters 120
+
+# 2. 入库：分册＋索引＋回执一次生成
+python scripts/build_split.py --src 底本.txt --dst refs/毛本120回_简体 \
+    --book 三国演义 --chapters 120 --t2s --source 'Project Gutenberg #23950'
+```
+
+`--chapters` 必须跟底本实况走：probe 探到几回就核几回，对不上会预警（exit 2）。JSON 记录列表源（编年体）改用 `scripts/build_json.py`，字段可映射。完整参数与端到端实录（真实命令＋真实输出）见 SKILL.md。
 
 ## 两种源模式
 
-- **Gutenberg 章回体** → `scripts/build_split.py`（第X回＋回目，支持楔子归位 ch000）
-- **JSON 记录列表**（如 gujilab/chinese-classical-corpus，CC0）→ `scripts/build_json.py`（字段映射、【】夹注剥离子存注本、卷号全局断言、title-override 修 OCR 缺漏）
+- **Gutenberg 章回体** → `scripts/build_split.py`：识别"第X回＋回目"，支持楔子归位 ch000、繁转简（`--t2s`，需 opencc）、许可证头尾切除
+- **JSON 记录列表**（如 gujilab/chinese-classical-corpus，CC0 派生）→ `scripts/build_json.py`：字段映射（volume/title/content）、【】夹注剥离子存注本（`--strip-brackets`）、OCR 元数据缺漏手工修平（`--title-override`）、卷号全局连续断言
 
-内置产出：分册 txt＋回目索引.md＋_manifest.json。断言失败零产物退出，不会写半个坏目录。
+## 产物结构
+
+```
+refs/
+├── _manifest.json        ← 入库回执（对账全凭它）
+├── 回目索引.md            ← 逐回标题＋字数，引用定位用
+└── <版本名>/              ← ch000（楔子，如有）+ ch001…chNNN 分册
+```
+
+_manifest.json 九字段：`book`、`source`（动态记录真实来源，`--source` 可覆写）、`source_sha256`（底本指纹，日后对版本）、`ingested_at`、`t2s`、`opencc_version`、`chapters`、`total_chars`、`files`（全部分册清单）。
+
+## 断言失败＝零产物退出
+
+所有校验不过（回数不符、序列断裂、缺依赖）都是**零产物退出**——输出目录不会有半成品，修好参数直接重跑即可，无需清理。"报错即停"是设计：宁可不动手，也不写半个坏目录。常见报错与五条实战反模式见 SKILL.md。
+
+## 与 book-to-skill 的分工
+
+同一本"书→技能"上游，下游分叉：book-to-skill 提炼"作者想教我什么"（框架/原则，明言不保原文）；guji-yuliao 保"原文到底写了什么"（逐字分册＋回目索引），服务于引用核对。纯方法论书用前者，要查原文引文的古籍用本技能。
+
+## FAQ
+
+- **怎么确认版本系统没拿错？**——probe 看末回指纹：毛本三国＝三分归一统、金本水浒＝惊恶梦；指纹不符就是拿错本子，立即停。已知版本系统速查表见 SKILL.md。
+- **出错怎么办？**——零产物退出，修参数重跑即可；报错对照表在 SKILL.md。
+- **想撤销入库？**——删输出目录即可，索引与 manifest 同在目录旁，一起删。
+- **语料能直接发布吗？**——公版原文可以；产出技能包发布前仍要走宿主侧脱敏与规范审查（本工具只管"书→分册"）。
+- **Windows 能用吗？**——能。纯 Python 标准库＋可选 opencc，Windows 10＋Python 3.13 实测（GBK 控制台报错零乱码、中文目录正常）。
+
+## 安装
+
+把 `guji-yuliao/` 放进宿主技能根目录（如 `~/.workbuddy/skills/`）。依赖 python3；`--t2s` 需 `pip install opencc-python-reimplemented`。Windows/macOS/Linux 通用。
 
 ## 源码
 
 GitHub：https://github.com/nannanpa/agent-skills/tree/main/guji-yuliao ——Issue/PR 欢迎。
 
-## 安装
-
-把 `guji-yuliao/` 放进宿主技能根目录（如 `~/.workbuddy/skills/`）。依赖 python3；`--t2s` 需 `pip install opencc-python-reimplemented`。Windows/macOS/Linux 通用（Windows 10＋Python 3.13 实测通过）。
-
 ## 发布记录
 
+- 1.0.6（2026-10-20）新手门槛补强：SKILL.md 新增「端到端演练（实录）」——真实底本（Gutenberg #23950）跑通"故意探错看预警→改对入库→看产物→抽验（含 opencc 词表盲区实录）"全过程；README 从简略版扩为完整门面（适合谁/快速开始/产物结构/manifest 字段表/FAQ）
 - 1.0.5（2026-10-20）复评低分项补强：新增「常见易犯的错误（反模式）」五条实战坑位表；「已知版本系统速查」升级为选本指导（通行本/特色本怎么选）；报错表加"零产物退出＝重跑安全"总原则
 - 1.0.4（2026-10-19）入库回执扩容：manifest 增底本 SHA-256 指纹、入库时间、转换参数；来源字段改动态记录（原写死"Gutenberg 电子版"，JSON 源时为假记录），新增 `--source` 覆写；回目索引头"底本"行同步取真实来源
 - 1.0.3（2026-10-19）平台侧为 1.0.2 同内容重复上架（CLI 撞号误判期间的迟到落库），无独立变更
