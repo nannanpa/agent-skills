@@ -6,7 +6,8 @@
       [--strip-brackets] [--boilerplate '钦定四库全书|資治通鑑巻|胡三省'] [--t2s] [--probe]
 坑位内建：卷首样板行剥离／【】夹注剥离（另存注本）／全局卷号断言／纪分组索引
 """
-import argparse, json, re, sys
+import argparse, hashlib, json, re, sys
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -28,8 +29,13 @@ def main():
     ap.add_argument("--title-override", default="", help="手工改题，格式 '102:晋纪二十四,276:后唐纪五'")
     ap.add_argument("--boilerplate", default="", help="卷首样板行的正则（|分隔），命中即删该行")
     ap.add_argument("--t2s", action="store_true")
+    ap.add_argument("--source", default="", help="来源说明（默认记 src 文件名）")
     ap.add_argument("--probe", action="store_true")
     args = ap.parse_args()
+
+    # 入库回执（2026-10-19 扩）：底本指纹取原始文件字节
+    src_path = Path(args.src)
+    src_sha256 = hashlib.sha256(src_path.read_bytes()).hexdigest()
 
     records = json.load(open(args.src, encoding="utf-8-sig"))
     assert isinstance(records, list), "期待记录列表型 JSON"
@@ -96,7 +102,18 @@ def main():
             idx.append(f"- 卷{vol:03d}　{title}（约{n}字）")
         idx.append("")
     (out_main.parent / "卷目索引.md").write_text("\n".join(idx) + "\n", encoding="utf-8")
-    manifest = {"book": args.book, "source": Path(args.src).name, "volumes": len(index),
+    opencc_ver = ""
+    if args.t2s:
+        try:
+            from importlib.metadata import version as _pkgver
+            opencc_ver = _pkgver("opencc-python-reimplemented")
+        except Exception:
+            opencc_ver = "unknown"
+    manifest = {"book": args.book, "source": args.source or src_path.name,
+                "source_sha256": src_sha256,
+                "ingested_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "t2s": args.t2s, "opencc_version": opencc_ver,
+                "volumes": len(index),
                 "total_chars_main": total_main, "total_chars_notes": total_notes,
                 "strip_brackets": args.strip_brackets,
                 "files": sorted(p.name for p in out_main.glob("ch*.txt"))}

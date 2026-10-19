@@ -3,10 +3,11 @@
 用法：
   探测：python build_split.py --src X.txt --probe
   入库：python build_split.py --src X.txt --dst <dir> --book <书名> --chapters 70 \
-        [--prologue 楔子] [--t2s] [--skip-head N] [--skip-tail N]
+        [--prologue 楔子] [--t2s] [--skip-head N] [--skip-tail N] [--source 'Gutenberg #23863']
 坑位内建：BOM / 数字写法三态（○作零·连写·行首空格）/ 头尾许可证切除 / 断言连续
 """
-import argparse, json, re, sys
+import argparse, hashlib, json, re, sys
+from datetime import datetime
 from pathlib import Path
 
 NUM = {"零":0,"〇":0,"○":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9}
@@ -31,8 +32,13 @@ def main():
     ap.add_argument("--chapters", type=int, default=0, help="期望回数（0=只探测）")
     ap.add_argument("--prologue", default="", help="楔子/序言标题词（存为 ch000）")
     ap.add_argument("--t2s", action="store_true", help="繁转简（需 opencc）")
+    ap.add_argument("--source", default="", help="来源说明（如 'Gutenberg #23863'；默认记 src 文件名）")
     ap.add_argument("--probe", action="store_true")
     args = ap.parse_args()
+
+    # 入库回执（2026-10-19 扩）：底本指纹取原始文件字节，识别"同一书名不同本子/静默截断"
+    src_path = Path(args.src)
+    src_sha256 = hashlib.sha256(src_path.read_bytes()).hexdigest()
 
     raw = Path(args.src).read_text(encoding="utf-8-sig")
     m = re.search(r"\*\*\* START OF.*?\*\*\*", raw)
@@ -100,13 +106,26 @@ def main():
         fn.write_text(f"{label}　{title}\n\n{body_clean}", encoding="utf-8")
         index.append((num, title, len(body_clean)))
 
-    idx = [f"# {args.book}·回目索引（{args.chapters} 回·简体）", "",
-           f"> 底本：Project Gutenberg 电子版，繁体转简体（{'含' if prologue else '不含'}楔子）。", ""]
+    src_label = args.source or src_path.name
+    idx = [f"# {args.book}·回目索引（{args.chapters} 回·{'简体' if args.t2s else '原文'}）", "",
+           f"> 底本：{src_label}，{'繁体转简体' if args.t2s else '原文照录'}（{'含' if prologue else '不含'}楔子）。", ""]
     for num, title, n in index:
         lab = (args.prologue or "楔子") if num == 0 else f"第{num:03d}回"
         idx.append(f"- {lab}　{title}（约{n}字）")
     (dst.parent / "回目索引.md").write_text("\n".join(idx) + "\n", encoding="utf-8")
-    manifest = {"book": args.book, "source": "Gutenberg 电子版", "chapters": len(index),
+    opencc_ver = ""
+    if args.t2s:
+        try:
+            from importlib.metadata import version as _pkgver
+            opencc_ver = _pkgver("opencc-python-reimplemented")
+        except Exception:
+            opencc_ver = "unknown"
+    # 入库回执：来源如实动态记录（不写死），指纹/时间/参数供日后对账与复现
+    manifest = {"book": args.book, "source": src_label,
+                "source_sha256": src_sha256,
+                "ingested_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "t2s": args.t2s, "opencc_version": opencc_ver,
+                "chapters": len(index),
                 "total_chars": sum(n for _,_,n in index),
                 "files": sorted(p.name for p in dst.glob("ch*.txt"))}
     (dst.parent / "_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")

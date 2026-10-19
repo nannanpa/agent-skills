@@ -1,7 +1,7 @@
 ---
 name: guji-yuliao
 displayName: 古籍语料入库器
-version: "1.0.2"
+version: "1.0.3"
 description: "把公版章回体古籍（如 Project Gutenberg 电子版）转成按章回分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。当用户要为《三国演义》《西游记》《水浒传》等古籍建原文语料库、或说'把某本古籍入库/做成语料技能'时使用。与 book-to-skill 平行——book-to-skill 提炼方法论结构，本技能保原文全本。不依赖特定平台。"
 ---
 
@@ -34,9 +34,9 @@ python scripts/build_split.py --src <文件> --probe
 ### 第 3 步 · 入库
 ```
 python scripts/build_split.py --src <文件> --dst <技能>/references/<版本名>_简体 \
-  --book <书名> --chapters <N> [--prologue 楔子] [--t2s]
+  --book <书名> --chapters <N> [--prologue 楔子] [--t2s] [--source 'Gutenberg #23863']
 ```
-脚本内建坑位：UTF-8 BOM／数字写法三态（白圈○作零·数字连写·行首空格）／章回行短前缀容忍（"是第一回"式）／古登堡许可证头尾切除／章回序列断言。产出：ch000（楔子）+ch001…chNNN＋回目索引.md＋_manifest.json。
+脚本内建坑位：UTF-8 BOM／数字写法三态（白圈○作零·数字连写·行首空格）／章回行短前缀容忍（"是第一回"式）／古登堡许可证头尾切除／章回序列断言。产出：ch000（楔子）+ch001…chNNN＋回目索引.md＋_manifest.json（**入库回执**：来源〔如实动态记录，`--source` 可覆写〕、底本 SHA-256 指纹、入库时间、转换参数——日后对版本、查"这批分册从哪个文件来的"全凭它）。
 
 ### 第 4 步 · 骨架三件套
 按语料技能模板写 SKILL.md（工作流：回目索引定位→读分册核对→引用注明版本回目）＋LESSONS.md（复盘层，永不发布）。SKILL.md 必须写明**版本口径**（哪个本子、多少回、与其他通行本差异）。
@@ -73,7 +73,7 @@ python scripts/build_split.py --src shuihu.txt --dst refs/金本70回_简体 \
 ```
 python scripts/build_json.py --src zizhi.json --dst refs/白文本_简体 \
   --book 资治通鉴 --volume volume --title period --content content \
-  --strip-brackets --t2s
+  --strip-brackets --t2s --source 'gujilab/chinese-classical-corpus（CC0 派生）'
 ```
 要点：`--strip-brackets` 把【胡注】剥出另存注本；OCR 源元数据不可信——period 空缺/形近异文（记/纪）用 `--title-override '102:晋纪二十四,276:后唐纪五'` 手工修平；卷号全局连续断言兜底。
 
