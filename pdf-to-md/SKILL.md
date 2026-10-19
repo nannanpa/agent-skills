@@ -1,6 +1,6 @@
 ---
 name: pdf-to-md
-version: "1.1.0"
+version: "1.1.1"
 description: 将 PDF（含扫描件 OCR 后带文字层的 PDF）提取为规整的 Markdown 文本。两步管道：①提取文本层 ②规整（去页码残留、合并强制断行、重排段落结构）。触发词：PDF转文本、PDF转md、扫描件提取、提取PDF文字、页码残留、断行规整、红头文件转文本。
 ---
 
