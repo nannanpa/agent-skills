@@ -1,7 +1,7 @@
 ---
 name: guji-yuliao
 displayName: 古籍语料入库器
-version: "1.0.3"
+version: "1.0.2"
 description: "把公版章回体古籍（如 Project Gutenberg 电子版）转成按章回分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。当用户要为《三国演义》《西游记》《水浒传》等古籍建原文语料库、或说'把某本古籍入库/做成语料技能'时使用。与 book-to-skill 平行——book-to-skill 提炼方法论结构，本技能保原文全本。不依赖特定平台。"
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: skill-miner
 displayName: 技能孵化器
-version: "1.0.4"
+version: "1.0.3"
 description: "从你与 AI 助手的日常任务记录中，发现并提炼可复用的技能（Skill）候选。当用户问'我让你帮我完成的任务里，能不能提炼一个或多个 skill？''最近哪些工作值得做成技能？''把这些重复流程固化下来'或类似表述时使用。适用于 Claude Code、Copilot CLI、OpenCode、WorkBuddy 等任何支持 Skill 机制的宿主；不依赖特定平台，产出符合通用 SKILL.md 规范的候选提案与技能骨架。"
 ---
 
