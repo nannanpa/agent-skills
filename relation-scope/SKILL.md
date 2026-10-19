@@ -1,13 +1,13 @@
 ---
 name: relation-scope
-version: 3.3.8  
+version: 3.4.0  
 description: 分析你与任何人的关系——同事、上级、家人、朋友、合作方、恋人，给出有证据、有置信度、不忽悠的判断。方法论不是理论拼装：来自长期真实关系语料的持续投喂与自我解剖复盘。核心能力：节奏数据量化（谁先发起、回应延迟多久、谁在结束对话）；置信度分级（证据不够就明说，绝不拿单条证据下重结论）；跨会话关系档案（每次分析存档，下次直接对照变化）。输入随意：微信多选消息转发（≤100 条 zip 直达）、粘贴聊天记录、写日记、口述场景。用于读懂对方态度、评估关系走向、复盘关键对话。
 description_zh: 人际关系智能分析（情感倾向、情绪识别、关系走向）  
 description_en: Interpersonal relationship analysis (emotional tendency, mood  
   detection, relationship dynamics)  
 ---
 
-# relation-scope · RelationScope v3.3.8
+# relation-scope · RelationScope v3.4.0
 
 > ## ⚠️ 输出铁律（每次输出前先过这一条）
 >
@@ -377,6 +377,7 @@ description_en: Interpersonal relationship analysis (emotional tendency, mood
 - **语气 / 语调 / 说话风格** → 模块 C（语言指纹基线与偏离检测）
 - **多人 / 群聊 / 网络分析** → 模块 D（节点-边-通路；阵营思维禁令）
 - **MBTI / 性格类型** → 模块 E（降级警示：仅自述类型可作沟通参考，禁止反推）
+- **TA 是个什么样的人 / 思维模式 / 画像** → 模块 F（思维格：心智模型、决策规则、激励结构、底线雷区、诚实边界五格——源自芒格决策思想，分析"TA 怎么算账"而非"TA 对你怎么样"）
 
 ---
 
@@ -493,4 +494,4 @@ Step 5：（可选）将结论按「关系档案维护」规范增量归档
 
 ---
 
-*relation-scope v3.3.8 · 通用方法论 · 可持续扩展*
+*relation-scope v3.4.0 · 通用方法论 · 可持续扩展*
