@@ -5,6 +5,7 @@
   入库：python build_split.py --src X.txt --dst <dir> --book <书名> --chapters 70 \
         [--prologue 楔子] [--t2s] [--skip-head N] [--skip-tail N] [--source 'Gutenberg #23863']
 坑位内建：BOM / 数字写法三态（○作零·连写·行首空格）/ 头尾许可证切除 / 断言连续
+退出码约定：0=成功；1=环境/输入错误（文件不存在、缺依赖、参数错）；2=数据预警（序列不匹配，零产物，核对后重跑）
 """
 import argparse, hashlib, json, re, sys
 from datetime import datetime
@@ -24,6 +25,10 @@ def cn2int(s):
         else: raise ValueError(f"未知数字字符 {ch} in {s}")
     return total + seg
 
+def die(msg, code=2):
+    """统一退出：code 1=环境/输入错误，2=数据预警（零产物）。"""
+    print(msg, file=sys.stderr); sys.exit(code)
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True)
@@ -38,9 +43,16 @@ def main():
 
     # 入库回执（2026-10-19 扩）：底本指纹取原始文件字节，识别"同一书名不同本子/静默截断"
     src_path = Path(args.src)
+    if not src_path.exists():
+        die(f"找不到底本文件：{src_path}（--src 需完整绝对路径）", 1)
     src_sha256 = hashlib.sha256(src_path.read_bytes()).hexdigest()
 
-    raw = Path(args.src).read_text(encoding="utf-8-sig")
+    # 编码读取（1.0.7 补）：UTF-8 失败自动回退 GB18030，回执记 source_encoding
+    try:
+        raw = src_path.read_text(encoding="utf-8-sig"); src_enc = "utf-8-sig"
+    except UnicodeDecodeError:
+        raw = src_path.read_text(encoding="gb18030"); src_enc = "gb18030"
+        print("⚠️ UTF-8 解码失败，已按 GB18030 读取（回执 source_encoding=gb18030）", file=sys.stderr)
     m = re.search(r"\*\*\* START OF.*?\*\*\*", raw)
     raw = raw[m.end():] if m else raw
     m = re.search(r"\*\*\* END OF", raw)
@@ -93,9 +105,11 @@ def main():
         return
 
     if prologue is None:
-        assert nums == list(range(1, args.chapters + 1)), f"序列异常: {nums[:5]}...{nums[-5:]}"
+        if nums != list(range(1, args.chapters + 1)):
+            die(f"序列异常: {nums[:5]}...{nums[-5:]}（期望 1-{args.chapters}）——零产物退出，先 --probe 核对回目", 2)
     else:
-        assert nums[1:] == list(range(1, args.chapters + 1)), f"序列异常: {nums[:6]}...{nums[-5:]}"
+        if nums[1:] != list(range(1, args.chapters + 1)):
+            die(f"序列异常: {nums[:6]}...{nums[-5:]}（期望楔子+1-{args.chapters}）——零产物退出，先 --probe 核对回目", 2)
 
     dst = Path(args.dst); dst.mkdir(parents=True, exist_ok=True)
     index = []
@@ -122,7 +136,7 @@ def main():
             opencc_ver = "unknown"
     # 入库回执：来源如实动态记录（不写死），指纹/时间/参数供日后对账与复现
     manifest = {"book": args.book, "source": src_label,
-                "source_sha256": src_sha256,
+                "source_sha256": src_sha256, "source_encoding": src_enc,
                 "ingested_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "t2s": args.t2s, "opencc_version": opencc_ver,
                 "chapters": len(index),
@@ -137,5 +151,5 @@ try:
 except ImportError:
     OpenCC = None
     if "--t2s" in sys.argv:
-        print("缺 opencc：pip install opencc-python-reimplemented", file=sys.stderr); sys.exit(1)
+        print("缺 opencc：pip install opencc-python-reimplemented；或去掉 --t2s 以原文照录（繁体）入库", file=sys.stderr); sys.exit(1)
 main()

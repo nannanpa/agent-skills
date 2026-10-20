@@ -1,7 +1,7 @@
 ---
 name: guji-yuliao
 displayName: 古籍语料入库器
-version: "1.0.6"
+version: "1.0.7"
 description: "把公版章回体古籍（如 Project Gutenberg 电子版）转成按章回分册的原文语料技能：繁转简、自动分册、回目索引、指纹核验。当用户要为《三国演义》《西游记》《水浒传》等古籍建原文语料库、或说'把某本古籍入库/做成语料技能'时使用。与 book-to-skill 平行——book-to-skill 提炼方法论结构，本技能保原文全本。不依赖特定平台。"
 ---
 
@@ -88,13 +88,17 @@ manifest 关键字段实录：`"source": "Project Gutenberg #23950（毛本）"`
 
 **总原则：所有断言失败都是零产物退出——输出目录不会有半成品，修好参数直接重跑即可，无需清理。**"报错即停"不是缺陷而是设计：宁可不动手，也不写半个坏目录；所以每次失败后的正确动作只有一件事——按表修参数，重跑。
 
+**退出码约定（两脚本一致）**：`0`=成功；`1`=环境/输入错误（文件不存在、缺依赖、JSON 结构不对、参数错）；`2`=数据预警（回目/卷号序列不匹配——零产物，核对底本后重跑）。脚本失败可按退出码分类处置，无需读 traceback 猜。
+
 | 报错/信号 | 原因 | 处置 |
 |---|---|---|
-| `序列异常: [2,3]...` 入库中断（exit 1，零产物） | 实际探测回数与 `--chapters` 不符——多为回目行格式变体（前缀/全角冒号）或选本缺回 | 先 `--probe` 看首末回目；确认底本完整后修正期望值；若是格式变体，升级本脚本正则而非改样本 |
+| `序列异常: [2,3]...` 入库中断（exit 2，零产物） | 实际探测回数与 `--chapters` 不符——多为回目行格式变体（前缀/全角冒号）或选本缺回 | 先 `--probe` 看首末回目；确认底本完整后修正期望值；若是格式变体，升级本脚本正则而非改样本 |
 | `⚠️ 期望 N 回…探测到 M 单元`（probe，exit 2） | 探测数与期望不符的预警——静默少回在入库前就此暴露 | 同上；这是设计行为，不是故障 |
-| `缺 opencc：pip install opencc-python-reimplemented`（exit 1） | 传了 `--t2s` 但未装 opencc | 按提示安装后重跑；不装则去掉 `--t2s`（保留繁体） |
-| `FileNotFoundError` | `--src` 路径错 | 用完整绝对路径；Windows 端注意反斜杠转义 |
-| 断言 `期待记录列表型 JSON`（build_json） | JSON 源不是记录数组（可能是嵌套 dict） | 检查源结构，必要时先做一层展开 |
+| `卷号不连续: ...`（build_json，exit 2，零产物） | JSON 源卷号断档/重复 | 核对源数据卷号；标题错漏用 `--title-override` 修 |
+| `缺 opencc：pip install opencc-python-reimplemented；或去掉 --t2s 以原文照录（繁体）入库`（exit 1） | 传了 `--t2s` 但未装 opencc | 二选一：按提示安装后重跑；或去掉 `--t2s` 跳过转换直接入库（保留繁体，回执 t2s=false 如实记录） |
+| `找不到底本文件/源文件：...`（exit 1） | `--src` 路径错 | 用完整绝对路径；Windows 端注意反斜杠转义 |
+| `期待记录列表型 JSON`（build_json，exit 1） | JSON 源不是记录数组（可能是嵌套 dict） | 检查源结构，必要时先做一层展开 |
+| `⚠️ UTF-8 解码失败，已按 GB18030 读取` | 底本不是 UTF-8（常见于某些 Windows 导出/早期电子化文本） | 无需处置——已自动回退 GB18030 继续入库，回执 `source_encoding` 如实记录；若转换后乱码，说明连 GB18030 也不对，查底本真实编码 |
 | 繁转简后个别字未转 | opencc 词表覆盖盲区 | 记入该技能 LESSONS，不逐字手改（语料以原文为准） |
 
 ## 常见易犯的错误（反模式）
@@ -129,7 +133,7 @@ python scripts/build_json.py --src zizhi.json --dst refs/白文本_简体 \
   --book 资治通鉴 --volume volume --title period --content content \
   --strip-brackets --t2s --source 'gujilab/chinese-classical-corpus（CC0 派生）'
 ```
-要点：`--strip-brackets` 把【胡注】剥出另存注本；OCR 源元数据不可信——period 空缺/形近异文（记/纪）用 `--title-override '102:晋纪二十四,276:后唐纪五'` 手工修平；卷号全局连续断言兜底。
+要点：`--strip-brackets` 默认开启——【夹注】剥出另存注本（注不丢），要留在正文用 `--keep-brackets`；OCR 源元数据不可信——period 空缺/形近异文（记/纪）用 `--title-override '102:晋纪二十四,276:后唐纪五'` 手工修平；卷首样板行因本而异，须用 `--boilerplate` 显式给正则（不设默认，防静默删行）；卷号全局连续断言兜底。
 
 ## 常见问答（FAQ）
 
@@ -154,7 +158,7 @@ python scripts/build_json.py --src zizhi.json --dst refs/白文本_简体 \
 ## 两种源模式
 
 1. **Gutenberg 纯文本源** → `scripts/build_split.py`（章回体：第X回＋回目）；
-2. **JSON 记录列表源**（如 gujilab/chinese-classical-corpus，派生数据 CC0）→ `scripts/build_json.py`：字段可映射（volume/title/content）、`--strip-brackets` 剥【】夹注（另存注本）、`--title-override` 修源数据缺漏、卷首样板行剥离、按纪/类分组索引。
+2. **JSON 记录列表源**（如 gujilab/chinese-classical-corpus，派生数据 CC0）→ `scripts/build_json.py`：字段可映射（volume/title/content）、`--strip-brackets` 默认开启剥【】夹注（另存注本，`--keep-brackets` 保留在正文）、`--title-override` 修源数据缺漏、`--boilerplate` 显式剥卷首样板行（不设默认，防静默删行）、按纪/类分组索引。
    - 古籍 OCR 源教训：元数据不可信（period 空缺/污染、记/纪形近异文），标题必须过正文验证，override 表手工修平。
 
 ## 源码仓库
