@@ -4,14 +4,16 @@
   探测：python build_split.py --src X.txt --probe
   入库：python build_split.py --src X.txt --dst <dir> --book <书名> --chapters 70 \
         [--prologue 楔子] [--t2s] [--skip-head N] [--skip-tail N] [--source 'Gutenberg #23863']
-坑位内建：BOM / 数字写法三态（○作零·连写·行首空格）/ 头尾许可证切除 / 断言连续
+坑位内建：BOM / 数字写法多态（○作零·连写·行首空格·大写壹贰叁…·廿卅·拾佰）/ 头尾许可证切除 / 断言连续
 退出码约定：0=成功；1=环境/输入错误（文件不存在、缺依赖、参数错）；2=数据预警（序列不匹配，零产物，核对后重跑）
 """
 import argparse, hashlib, json, re, sys
 from datetime import datetime
 from pathlib import Path
 
-NUM = {"零":0,"〇":0,"○":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9}
+NUM = {"零":0,"〇":0,"○":0,
+       "一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,
+       "壹":1,"贰":2,"叁":3,"肆":4,"伍":5,"陆":6,"柒":7,"捌":8,"玖":9}
 def cn2int(s):
     s = s.replace("第","").replace("回","")
     if s.isdigit(): return int(s)
@@ -20,8 +22,10 @@ def cn2int(s):
     total, seg = 0, 0
     for ch in s:
         if ch in NUM: seg = NUM[ch]
-        elif ch == "十": total += (seg or 1) * 10; seg = 0
-        elif ch == "百": total += (seg or 1) * 100; seg = 0
+        elif ch in ("十","拾"): total += (seg or 1) * 10; seg = 0
+        elif ch in ("百","佰"): total += (seg or 1) * 100; seg = 0
+        elif ch == "廿": total += (seg or 1) * 20; seg = 0
+        elif ch == "卅": total += (seg or 1) * 30; seg = 0
         else: raise ValueError(f"未知数字字符 {ch} in {s}")
     return total + seg
 
@@ -59,7 +63,7 @@ def main():
     raw = raw[:m.start()] if m else raw
     text = OpenCC("t2s").convert(raw) if args.t2s else raw
 
-    NUMCH = "零〇○一二三四五六七八九十百"
+    NUMCH = "零〇○一二三四五六七八九十百廿卅壹贰叁肆伍陆柒捌玖拾佰"
     # 回目行判据（2026-10-19 Windows 回函 3-1 修）：容忍"是/此"等 0-2 字短前缀；
     # "回"后必须紧跟分隔符（全角空/半角空/冒号）——防"此开卷第一回也"这类正文句误判为回目
     chap_re = re.compile(r"^[\s　]*(?:[^\s第]{0,2})?(第[" + NUMCH + r"]+回)(?=[　：:\s])[:：]?\s*(\S.*?)\s*$", re.M)

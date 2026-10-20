@@ -21,7 +21,7 @@ try:
 except ImportError:
     OpenCC = None
 
-NUMCH = "零〇○一二三四五六七八九十百"
+NUMCH = "零〇○一二三四五六七八九十百廿卅壹贰叁肆伍陆柒捌玖拾佰"
 
 def main():
     ap = argparse.ArgumentParser()
