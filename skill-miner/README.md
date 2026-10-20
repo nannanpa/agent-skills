@@ -22,6 +22,7 @@ GitHub：https://github.com/nannanpa/agent-skills/tree/main/skill-miner ——Is
 
 ## 发布记录
 
+- 1.0.4（2026-10-20）"过程废料"扫描线：第 0 步补"优先检查同一件事被反复执行/试错/回退的段落"——反复=缺护栏的信号，护栏类小工具多埋在折腾过程里（技能常从任务中的临时补丁长出来）；区分已固化（排除）与口头存在（优先提案）；偏差处置表加"过程废料当噪音"条
 - 1.0.3（2026-10-19）SKILL.md 补触发说法示例与降级处理、技术面异常处置表（首评实用性低分项针对性补强）；GitHub 源码仓库引流随本版实际上架
 - 1.0.2（2026-10-19）平台 icon 自动补丁版占号（引流版 zip 与其撞号未上架）
 - 1.0.1（2026-10-19）SkillHub 实际首发版本号（1.0.0 发布通道报错误判顺延；已过科恩/云鼎安全审核）
@@ -29,4 +30,4 @@ GitHub：https://github.com/nannanpa/agent-skills/tree/main/skill-miner ——Is
 
 ## 状态
 
-v1.0.3 · 开源发布（GitHub / SkillHub）· SkillHub 首评 4.5。
+v1.0.4 · 开源发布（GitHub / SkillHub）· SkillHub 首评 4.5。
