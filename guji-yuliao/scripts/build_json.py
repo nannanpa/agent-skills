@@ -16,6 +16,15 @@ def die(msg, code=2):
     """统一退出：code 1=环境/输入错误，2=数据预警（零产物）。"""
     print(msg, file=sys.stderr); sys.exit(code)
 
+
+class _Parser(argparse.ArgumentParser):
+    """1.0.9 A3：参数错（含缺必填）统一退 1——2 是"数据预警"码位。"""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        print(f"参数错误：{message}", file=sys.stderr)
+        sys.exit(1)
+
 try:
     from opencc import OpenCC
 except ImportError:
@@ -24,7 +33,7 @@ except ImportError:
 NUMCH = "零〇○一二三四五六七八九十百廿卅壹贰叁肆伍陆柒捌玖拾佰"
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = _Parser()
     ap.add_argument("--src", required=True)
     ap.add_argument("--dst", required=True)
     ap.add_argument("--book", required=True)
@@ -56,6 +65,10 @@ def main():
         print("⚠️ UTF-8 解码失败，已按 GB18030 读取（回执 source_encoding=gb18030）", file=sys.stderr)
     if not isinstance(records, list):
         die("期待记录列表型 JSON（根节点应为数组；当前不是）——检查源结构，必要时先做一层展开", 1)
+    # 1.0.9 补 2（复审）：空数组此前 --probe 退 0（假绿灯）、入库则崩在 index[0] 且已写出 manifest+索引（破坏零产物）；
+    # 与 build_split 的"0 单元退 2"对齐。有了本条，后面的 index[0] 不可达
+    if not records:
+        die("源 JSON 是空数组——没有任何卷记录，零产物退出（未写任何文件）", 2)
     # 2026-10-19 Windows 回函 3-3 修：t2s 请求但 opencc 缺失 → 硬报错，不得静默跳过转换
     if args.t2s and OpenCC is None:
         print("缺 opencc：pip install opencc-python-reimplemented；或去掉 --t2s 以原文照录（繁体）入库", file=sys.stderr); sys.exit(1)
@@ -72,15 +85,40 @@ def main():
     if pre_vols != list(range(1, len(pre_vols) + 1)):
         die(f"卷号不连续: {pre_vols[:5]}...{pre_vols[-5:]}——零产物退出（未写任何文件），核对源数据卷号", 2)
 
+    # 1.0.9 A2：--probe 此前是空参数（加了仍全量写盘）；改为真预览——卷号预检后打印卷数与首末卷标题即返回
+    if args.probe:
+        titles = []
+        for rec in records:
+            t = str(rec.get(args.title, "")).strip()
+            titles.append(t or f"卷{int(rec[args.volume])}")
+        print(f"探测到 {len(records)} 卷（模式B·JSON 记录列表；预览未写盘）")
+        for t in titles[:3]:
+            print("  ", t[:40])
+        if len(titles) > 5:
+            print("   ...")
+        for t in titles[-2:]:
+            print("  ", t[:40])
+        return
+
     out_main = Path(args.dst); out_main.mkdir(parents=True, exist_ok=True)
     out_notes = out_main.parent / (out_main.name + "_注本")
 
     overrides = {}
     if args.title_override:
         for pair in args.title_override.split(","):
-            k, v = pair.split(":"); overrides[int(k)] = v.strip()
+            # 1.1.0 C4：原 k, v = pair.split(":") 在新标题含冒号时抛 ValueError（split 得 3 段）
+            # → traceback + exit 1，参数错被当成崩溃。改 partition：只切第一个冒号，其余全归标题；
+            # 另补人话报错——参数错要退 1 且说清格式，不是抛栈。
+            k, sep, v = pair.partition(":")
+            if not sep:
+                die(f"--title-override 项格式错：{pair!r}——应为 '卷号:新标题'（新标题本身可含冒号）", 1)
+            try:
+                overrides[int(k)] = v.strip()
+            except ValueError:
+                die(f"--title-override 卷号非法：{k!r}——应为整数卷号", 1)
 
     index, total_main, total_notes = [], 0, 0
+    blob = []          # 1.1.0 C1/C2：累计入库正文，用于算"实际入库内容"指纹
     for rec in records:
         vol = int(rec[args.volume]); title = str(rec[args.title]).strip()
         content = str(rec[args.content])
@@ -102,7 +140,9 @@ def main():
             notes_txt = "\n".join(notes)
             content = bracket_re.sub("", content)
         fn = out_main / f"ch{vol:03d}.txt"
-        fn.write_text(f"卷{vol:03d}　{title}\n\n{content.strip()}\n", encoding="utf-8")
+        payload = f"卷{vol:03d}　{title}\n\n{content.strip()}\n"
+        fn.write_text(payload, encoding="utf-8")
+        blob.append(payload)
         if args.strip_brackets:
             out_notes.mkdir(parents=True, exist_ok=True)
             (out_notes / f"ch{vol:03d}.txt").write_text(f"卷{vol:03d}　{title}（胡注汇抄）\n\n{notes_txt.strip()}\n", encoding="utf-8")
@@ -119,13 +159,14 @@ def main():
         if head not in groups: groups[head] = []; order.append(head)
         groups[head].append((vol, title, n))
 
-    idx = [f"# {args.book}·卷目索引（{len(index)} 卷·简体）", ""]
+    idx = [f"# {args.book}·卷目索引（{len(index)} 卷·{'简体' if args.t2s else '原文照录'}）", ""]
     for head in order:
         idx.append(f"## {head}（{len(groups[head])} 卷）")
         for vol, title, n in groups[head]:
             idx.append(f"- 卷{vol:03d}　{title}（约{n}字）")
         idx.append("")
-    (out_main.parent / "卷目索引.md").write_text("\n".join(idx) + "\n", encoding="utf-8")
+    # 1.0.9 A4：索引/回执文件名带版本名（④-1 B 方案）——同父目录多版本互不覆盖
+    (out_main.parent / f"{out_main.name}_卷目索引.md").write_text("\n".join(idx) + "\n", encoding="utf-8")
     opencc_ver = ""
     if args.t2s:
         try:
@@ -133,15 +174,24 @@ def main():
             opencc_ver = _pkgver("opencc-python-reimplemented")
         except Exception:
             opencc_ver = "unknown"
+    # 1.1.0 C1/C2（指纹边界）：source_sha256 只覆盖源 JSON 字节，不反映实际入库的正文——
+    # 经 t2s 转换、样板行剥离、【】夹注剥离后，入库文本与源 JSON 早已不同。
+    # 补 content_sha256（入库正文指纹）与 content_stage（正文所处处理阶段），
+    # 引用核对时才能说清"手上这份是哪一阶段的产物"。
+    content_sha256 = hashlib.sha256("".join(blob).encode("utf-8")).hexdigest()
+    content_stage = ("繁转简" if args.t2s else "原文照录") \
+        + ("+剥样板行" if args.boilerplate else "") \
+        + ("+剥夹注" if args.strip_brackets else "")
     manifest = {"book": args.book, "source": args.source or src_path.name,
                 "source_sha256": src_sha256, "source_encoding": src_enc,
+                "content_sha256": content_sha256, "content_stage": content_stage,
                 "ingested_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "t2s": args.t2s, "opencc_version": opencc_ver,
                 "volumes": len(index),
                 "total_chars_main": total_main, "total_chars_notes": total_notes,
                 "strip_brackets": args.strip_brackets,
                 "files": sorted(p.name for p in out_main.glob("ch*.txt"))}
-    (out_main.parent / "_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out_main.parent / f"{out_main.name}_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"OK {len(index)} 卷入库，白文≈{total_main} 字" + (f"，注≈{total_notes} 字" if args.strip_brackets else ""))
     print("首卷:", index[0][1], "| 末卷:", index[-1][1])
 

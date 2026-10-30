@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""WPS-safe tracked-change (修订模式) inserter for .docx.
+"""WPS-safe tracked-change (tracked changes / redline) writer for .docx.
 
 Usage:
     python apply_track_changes.py SRC.docx OUTPUT.docx [author] [date_iso]
 
 Then call the apply() helper from your own script, or import and drive it.
-Insertion-only: keeps original text, adds new text as <w:ins> right after an
-anchor run. Avoids <w:del> to prevent the WPS "rainbow spinner" hang.
+
+Two modes:
+  · Insertion (default) — keeps original text, adds new text as <w:ins> right
+    after an anchor run. Preferred mode: safest for WPS.
+  · Correction — for text that must actually be removed or replaced (errata,
+    wrong characters, dropped words). Uses <w:del> + <w:delText>, optionally
+    followed by <w:ins> carrying the replacement.
+
+Note on the "avoid w:del" folklore: <w:del> is not inherently unsafe. The
+rainbow-spinner hang comes from malformed structures (duplicate w:id, missing
+author/date, stray rPr, touching body-level sectPr) — not from w:del itself.
+A correction that cannot be expressed as an insertion MUST use w:del;
+modelling it as "insert the new text and leave the wrong text" is worse.
 """
 import copy
 import sys
@@ -82,19 +93,128 @@ def open_for_revision(src, author="审校", date_iso="2026-07-23T09:00:00Z"):
     return doc, counter, author, date_iso
 
 
-def make_ins(text, counter, author, date_iso):
+def _rpr_for(r_el, p_el=None):
+    """取用于新 run 的 <w:rPr> 副本——**格式继承的唯一入口**。
+
+    人工在 Word/WPS 里输入文字，插入点会自动继承"当前格式"（字体、字号、
+    加粗、字符样式等）。脚本若新建一个不带 rPr 的 run，插入的文字就掉回
+    文档默认字体，与人工操作观感不一致——这正是 1.1.1 修掉的缺陷。
+
+    取值优先级：
+      ① 该 run 自身的 rPr（直接格式，最常见）；
+      ② 段落标记的 rPr（w:pPr/w:rPr）——正文 run 不带直接格式、靠段落样式
+         排版时，段落标记格式才是"当前格式"；
+      ③ 都没有 → 返回 None，新 run 不带 rPr，自动继承段落样式（正确行为）。
+
+    **必须剔除 w:rPrChange**：那是格式修订标记，复制过来会形成嵌套修订，
+    Word/WPS 可能拒开文件（与"彩虹圈"同源的结构性风险）。
+    """
+    rpr = r_el.find(qn("w:rPr")) if r_el is not None else None
+    if rpr is None and p_el is not None:
+        ppr = p_el.find(qn("w:pPr"))
+        if ppr is not None:
+            rpr = ppr.find(qn("w:rPr"))
+    if rpr is None:
+        return None
+    new = copy.deepcopy(rpr)
+    for ch in new.findall(qn("w:rPrChange")):
+        new.remove(ch)
+    return new
+
+
+def make_ins(text, counter, author, date_iso, rpr=None):
+    """造一个 <w:ins> 修订插入。
+
+    `rpr` 是要继承的 <w:rPr> 元素（由 _rpr_for 提供）；必须作为 <w:r> 的
+    **第一个子元素**（OOXML schema：w:rPr 在 w:t 之前）。
+    """
     ins = OxmlElement("w:ins")
     counter[0] += 1
     ins.set(qn("w:id"), str(counter[0]))
     ins.set(qn("w:author"), author)
     ins.set(qn("w:date"), date_iso)
     r = OxmlElement("w:r")
+    if rpr is not None:
+        r.append(copy.deepcopy(rpr))
     t = OxmlElement("w:t")
     t.set(qn("xml:space"), "preserve")
     t.text = text
     r.append(t)
     ins.append(r)
     return ins
+
+
+def make_del(r_el, counter, author, date_iso):
+    """Wrap a run element in <w:del>, turning its <w:t> into <w:delText>.
+
+    The run keeps its original <w:rPr> (formatting must survive the deletion
+    marker); only the text-bearing tag changes. Returns the new w:del element.
+    """
+    del_el = OxmlElement("w:del")
+    counter[0] += 1
+    del_el.set(qn("w:id"), str(counter[0]))
+    del_el.set(qn("w:author"), author)
+    del_el.set(qn("w:date"), date_iso)
+    r_el.getparent().replace(r_el, del_el)
+    del_el.append(r_el)
+    for t in r_el.findall(qn("w:t")):
+        t.tag = qn("w:delText")
+    return del_el
+
+
+def _run_text(r_el):
+    """Full text of a run element (concatenates all w:t children)."""
+    return "".join(t.text or "" for t in r_el.findall(qn("w:t")))
+
+
+def split_insert(run, off, text, counter, author, date_iso):
+    """Insert <w:ins> at character offset `off` inside `run`.
+
+    off == len(run.text) appends right after the run; otherwise the run is
+    split at `off` first and the insertion lands between prefix and suffix.
+
+    插入内容**继承该 run 的字符格式**（与人工输入一致，见 _rpr_for）。
+    """
+    rpr = _rpr_for(run._r, run._r.getparent())
+    if off >= len(run.text):
+        run._r.addnext(make_ins(text, counter, author, date_iso, rpr))
+        return
+    if off > 0:
+        split_run_at(run, off)      # run keeps prefix, suffix becomes next sibling
+    run._r.addnext(make_ins(text, counter, author, date_iso, rpr))
+
+
+def del_insert(run, off, length, text, counter, author, date_iso):
+    """Delete run text [off, off+length) as <w:del>; optionally insert `text` after it.
+
+    `text` empty → pure deletion. Non-empty → the deleted span is marked and the
+    replacement follows as <w:ins>, which is how a reviewer sees "wrong → right".
+    """
+    if not (0 <= off and off + length <= len(run.text)):
+        raise ValueError(f"range out of bounds: {run.text!r} [{off},{off+length})")
+    # 1) isolate the span as its own run
+    if off > 0:
+        split_run_at(run, off)                       # run -> prefix, next sibling = target
+        target = run._r.getnext()
+        if target is None or target.tag != qn("w:r"):
+            raise ValueError("failed to locate target run after split")
+    else:
+        target = run._r
+    # 2) if the span does not end the run, cut the remainder off
+    tlen = len(_run_text(target))
+    if length < tlen:
+        class _P:
+            pass
+        proxy = _P()
+        proxy._r = target
+        proxy.text = _run_text(target)
+        split_run_at(proxy, length)                  # target -> span, suffix follows
+    # 3) mark the span deleted, then optionally insert the replacement
+    # 替换文字继承**被替换文字**的格式（人工改字时新字随原字格式）
+    rpr = _rpr_for(target, target.getparent())
+    del_el = make_del(target, counter, author, date_iso)
+    if text:
+        del_el.addnext(make_ins(text, counter, author, date_iso, rpr))
 
 
 def split_run_at(run, offset):
@@ -129,22 +249,65 @@ def apply(doc, counter, author, date_iso, p_idx, phrase, text):
     `phrase` must be a substring found within a SINGLE run of that paragraph.
     Anchor on the run that starts with the phrase tail; use Unicode escapes in
     `phrase` when hidden chars (e.g. 》）—) may be present.
+
+    插入内容**继承锚点 run 的字符格式**（字体/字号/加粗/字符样式），
+    与人工在 Word 里输入的观感一致（1.1.1 修掉的缺陷）。
     """
     p = doc.paragraphs[p_idx]
     for run in p.runs:
         if phrase in run.text:
             off = run.text.find(phrase)
             end = off + len(phrase)
+            rpr = _rpr_for(run._r, run._r.getparent())
             if end >= len(run.text):
-                run._r.addnext(make_ins(text, counter, author, date_iso))
+                run._r.addnext(make_ins(text, counter, author, date_iso, rpr))
             else:
                 split_run_at(run, end)
-                run._r.addnext(make_ins(text, counter, author, date_iso))
+                run._r.addnext(make_ins(text, counter, author, date_iso, rpr))
             return
     raise ValueError(f"anchor phrase not found in paragraph {p_idx}: {phrase!r}")
 
 
-def verify(path):
+def apply_del(doc, counter, author, date_iso, p_idx, phrase, replacement=""):
+    """Replace (or delete) `phrase` in paragraph p_idx as a tracked correction.
+
+    `phrase` must sit inside a SINGLE run of that paragraph — same rule as
+    apply(). replacement="" means pure deletion. Returns the run that carried
+    the phrase, so callers can chain further edits on the same paragraph.
+    """
+    p = doc.paragraphs[p_idx]
+    for run in p.runs:
+        if phrase in run.text:
+            off = run.text.find(phrase)
+            del_insert(run, off, len(phrase), replacement, counter, author, date_iso)
+            return run
+    raise ValueError(f"anchor phrase not found in paragraph {p_idx}: {phrase!r}")
+
+
+def _fmt_sig(r_el):
+    """run 的关键格式指纹：字体/字号/加粗/斜体/下划线/字符样式。
+
+    返回 None 表示该 run 无直接格式（靠段落样式呈现）。
+    """
+    if r_el is None:
+        return None
+    rpr = r_el.find(qn("w:rPr"))
+    if rpr is None:
+        return None
+    sig = {}
+    rf = rpr.find(qn("w:rFonts"))
+    if rf is not None:
+        sig["fonts"] = (rf.get(qn("w:ascii")), rf.get(qn("w:eastAsia")),
+                        rf.get(qn("w:hAnsi")))
+    for tag in ("w:sz", "w:szCs", "w:b", "w:i", "w:u", "w:rStyle"):
+        el = rpr.find(qn(tag))
+        if el is not None:
+            sig[tag] = el.get(qn("w:val")) if el.get(qn("w:val")) is not None else "1"
+    return sig
+
+
+def verify(path, expect_ins=None, expect_del=None, check_fmt=False,
+            check_comments=False):
     import zipfile
     from lxml import etree
     z = zipfile.ZipFile(path)
@@ -162,12 +325,86 @@ def verify(path):
     body = root.find(qn("w:body"))
     ins = body.findall(".//" + qn("w:ins"))
     dels = body.findall(".//" + qn("w:del"))
-    ids = [i.get(qn("w:id")) for i in ins]
-    assert len(set(ids)) == len(ids), "duplicate w:id"
+    # 1.1.0：w:ins 与 w:del 共用同一 id 空间——必须合起来查唯一性，
+    # 只查 ins 会漏掉 del 与 ins 撞号的情况（撞号是彩虹圈卡死首因）。
+    all_ids = [i.get(qn("w:id")) for i in ins] + [d.get(qn("w:id")) for d in dels]
+    assert len(set(all_ids)) == len(all_ids), "duplicate w:id across w:ins and w:del"
     for i in ins:
         assert i.get(qn("w:author")) and i.get(qn("w:date")) and i.find(qn("w:r")) is not None
-    print(f"OK: w:ins={len(ins)} w:del={len(dels)} ids_unique={len(set(ids))==len(ids)}")
-    return len(ins)
+    for d in dels:
+        assert d.get(qn("w:author")) and d.get(qn("w:date")) and d.find(qn("w:r")) is not None
+        # 删除标记内的文本必须是 w:delText；残留 w:t 会被 Word/WPS 当成未删内容
+        assert d.find(".//" + qn("w:t")) is None, "w:del contains w:t (must be w:delText)"
+        assert d.find(".//" + qn("w:delText")) is not None, "w:del missing w:delText"
+    if expect_ins is not None:
+        assert len(ins) == expect_ins, f"expected {expect_ins} w:ins, got {len(ins)}"
+    if expect_del is not None:
+        assert len(dels) == expect_del, f"expected {expect_del} w:del, got {len(dels)}"
+    if check_fmt:
+        # 格式继承回归（1.1.1 修掉的缺陷）：插入的 run 若不带 rPr，
+        # 文字会掉回文档默认字体——与人工在 Word 里输入的观感不一致。
+        # 判据：插入 run 与它**前一个普通 run** 的格式指纹必须一致；
+        # 前一个 run 本就无直接格式时，两者都靠段落样式，视为一致。
+        for i in ins:
+            r = i.find(qn("w:r"))
+            prev = i.getprevious()
+            while prev is not None and prev.tag != qn("w:r"):
+                prev = prev.getprevious()
+            if prev is None:
+                continue
+            sig_ins = _fmt_sig(r)
+            sig_prev = _fmt_sig(prev)
+            if sig_prev is None:
+                continue
+            assert sig_ins == sig_prev, \
+                f"插入内容未继承当前格式: {sig_ins} != {sig_prev}"
+    if check_comments:
+        # 批注结构回归（1.2.0）：批注要动四个地方，缺一个 Word/WPS 就打不开
+        # 或看不到批注——comments.xml / [Content_Types].xml / document.xml.rels /
+        # document.xml 的锚点。逐项断言，别等打开才发现。
+        names = z.namelist()
+        assert "word/comments.xml" in names, "批注部件 word/comments.xml 缺失"
+        croot = etree.fromstring(z.read("word/comments.xml"))
+        cs = croot.findall(qn("w:comment"))
+        for c in cs:
+            assert c.get(qn("w:id")) is not None, "批注缺 w:id"
+            assert c.get(qn("w:author")), "批注缺 w:author"
+            assert c.get(qn("w:date")), "批注缺 w:date"
+            assert c.find(".//" + qn("w:t")) is not None, "批注正文为空"
+        ct = etree.fromstring(z.read("[Content_Types].xml"))
+        ct_parts = [o.get("PartName") for o in ct]
+        assert "/word/comments.xml" in ct_parts, \
+            "comments.xml 未在 [Content_Types].xml 登记（Word 会打不开文件）"
+        rels = etree.fromstring(z.read("word/_rels/document.xml.rels"))
+        rel_targets = [r.get("Target") for r in rels]
+        assert "comments.xml" in rel_targets, \
+            "comments.xml 未在 word/_rels/document.xml.rels 登记（批注与正文无关联）"
+        # 锚点配对：start / end / reference 三者的 id 集合必须一致
+        starts = body.findall(".//" + qn("w:commentRangeStart"))
+        ends = body.findall(".//" + qn("w:commentRangeEnd"))
+        refs = body.findall(".//" + qn("w:commentReference"))
+        s_ids = sorted(e.get(qn("w:id")) for e in starts)
+        e_ids = sorted(e.get(qn("w:id")) for e in ends)
+        r_ids = sorted(e.get(qn("w:id")) for e in refs)
+        c_ids = sorted(c.get(qn("w:id")) for c in cs)
+        assert s_ids == e_ids, f"commentRangeStart/End 不配对: {s_ids} vs {e_ids}"
+        assert r_ids == c_ids, f"commentReference 与 comments.xml 不匹配: {r_ids} vs {c_ids}"
+        # 顺序：每条批注的 reference 必须排在其 commentRangeEnd **之后**
+        # （写反了 WPS 显示不出批注——1.2.0 实战踩到）
+        for p in body.iter(qn("w:p")):
+            ended = set()
+            for k in p:
+                if k.tag == qn("w:commentRangeEnd"):
+                    ended.add(k.get(qn("w:id")))
+                elif k.tag == qn("w:r"):
+                    ref = k.find(qn("w:commentReference"))
+                    if ref is not None:
+                        rid = ref.get(qn("w:id"))
+                        assert rid in ended, \
+                            f"commentReference(id={rid}) 出现在其 commentRangeEnd 之前"
+        print(f"OK: 批注 {len(cs)} 条，锚点配对与顺序正确")
+    print(f"OK: w:ins={len(ins)} w:del={len(dels)} ids_unique={len(set(all_ids))==len(all_ids)}")
+    return len(ins), len(dels)
 
 
 def _die(msg, hint):
