@@ -1,4 +1,4 @@
-// pdf_ocr.swift — PDF → 渲染 → 离线中文 OCR → 带页标记的中间产物（pdf-to-md 1.2.0 配套）
+// pdf_ocr.swift — PDF → 渲染 → 离线中文 OCR → 带页标记的中间产物（pdf-to-md 1.2.1 配套）
 //
 // 为什么需要它：纯扫描件 PDF 没有文字层，pdf_extract.py 只能提取出空文本。
 // 原来的链路要人工做两件事：①把 PDF 渲染成 PNG（曾依赖 PyMuPDF，macOS 上往往没装）
@@ -45,23 +45,35 @@ var detectHeader = true
 
 var argv = Array(CommandLine.arguments.dropFirst())
 var i = 0
+
+/// 取当前选项的值；选项处在末尾缺值时报错退 2（防 argv[i] 越界崩溃）。
+/// 各取值型 case 统一走它——谁都不许直接下标 argv[i]。
+func takeValue(_ option: String, _ usage: String) -> String {
+    i += 1
+    guard i < argv.count else {
+        FileHandle.standardError.write("选项 \(option) 缺少取值。\n用法: swift pdf_ocr.swift 输入.pdf 输出.md \(usage)\n".data(using: .utf8)!)
+        exit(2)
+    }
+    return argv[i]
+}
+
 while i < argv.count {
     let a = argv[i]
     switch a {
     case "--dpi":
-        i += 1; dpi = Double(argv[i]) ?? 150
+        dpi = Double(takeValue(a, "--dpi N")) ?? 150
     case "--page":
-        i += 1; onlyPage = Int(argv[i])
+        onlyPage = Int(takeValue(a, "--page N（1 起）"))
     case "--coords":
         wantCoords = true
     case "--render-only":
         renderOnly = true
     case "--png-dir":
-        i += 1; pngDir = argv[i]
+        pngDir = takeValue(a, "--png-dir DIR")
     case "--low-conf":
-        i += 1; lowConf = Double(argv[i]) ?? 0.5
+        lowConf = Double(takeValue(a, "--low-conf X")) ?? 0.5
     case "--langs":
-        i += 1; langs = argv[i].split(separator: ",").map(String.init)
+        langs = takeValue(a, "--langs a,b").split(separator: ",").map(String.init)
     case "--no-hdr":
         detectHeader = false
     case "-h", "--help":
@@ -261,5 +273,5 @@ if totalLow > 0 {
     print("⚠ \(totalLow) 行置信度低于 \(lowConf)，已标〔OCR待核〕——请回图逐处核对（用 --page N --coords 定位）")
 }
 if totalHdr > 0 {
-    print("ℹ \(totalHdr) 行落在页顶/页底 7% 且多页重复，判为页眉/页脚，已标〔页眉页脚〕（未删行）")
+    print("ℹ \(totalHdr) 行落在页顶/页底 7% 且多页同区出现（几何判据，不比文本），判为页眉/页脚，已标〔页眉页脚〕（未删行）")
 }

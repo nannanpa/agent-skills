@@ -1,6 +1,6 @@
 ---
 name: docx-track-changes-wps
-version: "1.1.0"
+version: "1.1.1"
 description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment）时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承（与人工输入观感一致）、批注写入（说明"为什么改"）、导出修订批注清单、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、修订格式不匹配、批注、修改意见清单。
 ---
 
@@ -131,7 +131,7 @@ del_insert(r0, 0, 4, "2006", counter, author, date)
 | ③ | `word/_rels/document.xml.rels` | 登记关系（指向 `comments.xml`） |
 | ④ | `word/document.xml` | 锚点：`commentRangeStart` → 内容 → `commentRangeEnd` → `commentReference` |
 
-python-docx 1.2.0 没有内置 comments part 支持，因此 ①②③ 采用**保存后 zip 后处理**（比手工构造 Part/Relationship 对象稳，也不会被 python-docx 的保存流程丢掉）。
+库版本 python-docx 1.2.0 没有内置 comments part 支持，因此 ①②③ 采用**保存后 zip 后处理**（比手工构造 Part/Relationship 对象稳，也不会被 python-docx 的保存流程丢掉）。
 
 **接口**（`scripts/add_comment.py`）：
 
@@ -151,6 +151,8 @@ save_with_comments(doc, out)          # 保存 + 注入批注
 | `phrase` | 批注**锚定到哪段文字**（决定批注挂在谁身上） |
 | `text` | 批注内容（"为什么这么改"） |
 | `anchor_phrase` | 可选：把批注锚到**另一处**——通常是"被删掉的那段字" |
+
+命令行对应：**CLI: `--phrase` / `--anchor`，API: `phrase` / `anchor_phrase`**。`--phrase`（挂载锚点）必填，不传报错；`--anchor`（另锚）可选。
 
 **锚定规则**：
 
@@ -177,7 +179,7 @@ python3 scripts/export_markup.py 产物.docx -o 修改意见清单.md
 
 - **实测环境**：macOS + WPS。开发、调试、彩虹圈规避清单均来自 macOS 版 WPS 的实测。
 - **实测通过（2026-10-14，双平台闭环）**：①macOS + WPS；②Windows 10 Pro 22H2 + WPS Office 12.1.0.29161 个人版——修复版 self_test 一次全绿（Python 3.13.14 / python-docx 1.2.0）；WPS 三点检查：打开【过】、接受/拒绝【过】、修订轨作者与动作可见（时间列不显示，见"已知坑"，判定为窗格显示惯例，不影响验收）；"接受修订"后的 WPS 另存件经 XML 解剖确认：w:ins 归零、插入文本并入正文、行为正确。
-- **仍未验证**：Microsoft Word 桌面版、WPS 移动端。设计上应当兼容（输出为标准 OOXML 修订标记、settings 元素顺序符合 ECMA-376、全程不用 `w:del`），用到时按本节三步验收走一遍即可。
+- **仍未验证**：Microsoft Word 桌面版、WPS 移动端。设计上应当兼容（输出为标准 OOXML 修订标记、settings 元素顺序符合 ECMA-376、纯插入场景不用 `w:del`，勘误场景见「勘误与替换」节），用到时按本节三步验收走一遍即可。
 - **Windows 首次使用前的三步验收**：
   1. 跑 `scripts/self_test.py` 生成测试件并确认结构校验全绿；
   2. 用 Windows WPS 打开测试件：不卡彩虹圈、修订轨正常显示、作者与日期正确；
@@ -194,6 +196,13 @@ python3 scripts/export_markup.py 产物.docx -o 修改意见清单.md
 5. `doc.save(...)` 后校验（见下）。
 
 - **WPS 个人版修订窗格不显示时间列。** 作者与"插入了内容"动作可见，插入时间默认不展示（Windows 10 + WPS 12.1.0.29161 实测）。验收以"作者+动作+位置可见"为准；需核对时间时读 XML 里的 `w:date`，或测试件把 `w:date` 设为当天当地时刻再人工比对。
+
+**命令行直接改**（1.1.1 起）：
+
+    python3 scripts/apply_track_changes.py 原件.docx 输出.docx --p-idx 5 --phrase "原句尾部。" --text "（新增内容）"
+    python3 scripts/apply_track_changes.py 原件.docx 输出.docx --p-idx 8 --phrase "发辉" --text "发挥" --del
+
+不给操作参数时只保存并校验（stdout 明示"未修改正文"）；参数不齐退 1。
 
 ## 已知坑
 

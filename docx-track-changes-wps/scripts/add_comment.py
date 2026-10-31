@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""向 .docx 写入批注（comment）——docx-track-changes-wps 1.2.0 配套。
+"""向 .docx 写入批注（comment）——docx-track-changes-wps 配套脚本，版本随 SKILL.md 头部。
 
 为什么需要它：真实审校流程里，修订标记与批注是**两套并行**的——
     · 修订标记（w:ins / w:del）：把字改了，Word/WPS 的修订轨能看到
@@ -14,7 +14,7 @@
     ③ word/_rels/document.xml.rels（登记关系）
     ④ word/document.xml（锚点：commentRangeStart / commentRangeEnd / commentReference）
 
-python-docx 1.2.0 没有内置 comments part 支持，因此 ①②③ 采用**保存后 zip 后处理**
+库版本 python-docx 1.2.0 没有内置 comments part 支持，因此 ①②③ 采用**保存后 zip 后处理**
 （比手工构造 Part/Relationship 对象稳得多，也不会被 python-docx 的保存流程丢掉）。
 
 用法（脚本内调用）：
@@ -24,7 +24,8 @@ python-docx 1.2.0 没有内置 comments part 支持，因此 ①②③ 采用**�
     save_with_comments(doc, out)          # 保存 + 注入批注
 
 命令行：
-    python3 add_comment.py 原件.docx 输出.docx 段落号 "批注内容" [作者] [日期ISO] [--anchor 锚点短语]
+    python3 add_comment.py 原件.docx 输出.docx 段落号 "批注内容" --phrase 挂载锚点 [--anchor 另锚短语] [作者] [日期ISO]
+    （--phrase 必填：决定批注挂在谁身上；--anchor 可选：把批注锚到另一处，如被删掉的那段字）
 """
 import os
 import sys
@@ -253,21 +254,37 @@ def _die(msg, hint):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
+    args = sys.argv[1:]
+
+    def _take(flag):
+        """取出 `flag 其值` 对并从位置参数里删掉；返回 None 表示未给。"""
+        if flag in args:
+            i = args.index(flag)
+            if i + 1 >= len(args):
+                _die(f"{flag} 缺少取值", f"{flag} 后必须跟一个短语，如 {flag} \"科学发展观\"。")
+            v = args[i + 1]
+            del args[i:i + 2]
+            return v
+        return None
+
+    phrase = _take("--phrase")
+    anchor = _take("--anchor")
+    if not phrase:
+        # 不再静默取首 run 当锚点——锚点必须明示，避免批注挂错地方
+        _die("缺少 --phrase（批注挂载锚点，必填）",
+             "用法：python3 add_comment.py 原件.docx 输出.docx 段落号 \"批注内容\" "
+             "--phrase 挂载锚点 [--anchor 另锚短语] [作者] [日期ISO]。"
+             "--phrase 决定批注挂在谁身上；--anchor 是另锚（可选）。")
+    if len(args) < 4:
         _die("参数不足",
              "用法：python3 add_comment.py 原件.docx 输出.docx 段落号 \"批注内容\" "
-             "[作者] [日期ISO] [--anchor 锚点短语]")
-    src, out, p_idx, ctext = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
-    author = sys.argv[5] if len(sys.argv) > 5 else "审校"
-    date_iso = sys.argv[6] if len(sys.argv) > 6 else "2026-10-30T00:00:00Z"
-    anchor = None
-    if "--anchor" in sys.argv:
-        anchor = sys.argv[sys.argv.index("--anchor") + 1]
+             "--phrase 挂载锚点 [--anchor 另锚短语] [作者] [日期ISO]")
+    src, out, p_idx, ctext = args[0], args[1], int(args[2]), args[3]
+    author = args[4] if len(args) > 4 else "审校"
+    date_iso = args[5] if len(args) > 5 else "2026-10-30T00:00:00Z"
     try:
         doc, counter, a, d = open_for_revision(src, author, date_iso)
-        p = doc.paragraphs[p_idx]
-        phrase = anchor if anchor else (p.runs[0].text if p.runs else "")
-        cid = add_comment(doc, p_idx, phrase, ctext, a, d)
+        cid = add_comment(doc, p_idx, phrase, ctext, a, d, anchor_phrase=anchor)
         n = save_with_comments(doc, out)
         print(f"完成: {out}  批注 {n} 条（id={cid}）")
     except FileNotFoundError:

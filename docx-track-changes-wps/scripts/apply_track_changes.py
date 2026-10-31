@@ -4,8 +4,13 @@
 
 Usage:
     python apply_track_changes.py SRC.docx OUTPUT.docx [author] [date_iso]
+        # 只启用修订、保存并校验，不修改正文（stdout 明示）
+    python apply_track_changes.py SRC.docx OUT.docx --p-idx 5 --phrase "原句尾部。" --text "（新增内容）"
+        # 真插入：在段落 5 的锚点短语后写入 w:ins 修订
+    python apply_track_changes.py SRC.docx OUT.docx --p-idx 8 --phrase "发辉" --text "发挥" --del
+        # 真勘误：删旧换新（--text 缺省=纯删除），走 apply_del()
 
-Then call the apply() helper from your own script, or import and drive it.
+Or import and drive the apply() helpers from your own script.
 
 Two modes:
   · Insertion (default) — keeps original text, adds new text as <w:ins> right
@@ -98,7 +103,7 @@ def _rpr_for(r_el, p_el=None):
 
     人工在 Word/WPS 里输入文字，插入点会自动继承"当前格式"（字体、字号、
     加粗、字符样式等）。脚本若新建一个不带 rPr 的 run，插入的文字就掉回
-    文档默认字体，与人工操作观感不一致——这正是 1.1.1 修掉的缺陷。
+    文档默认字体，与人工操作观感不一致——这正是 1.1.0 修掉的缺陷。
 
     取值优先级：
       ① 该 run 自身的 rPr（直接格式，最常见）；
@@ -251,7 +256,7 @@ def apply(doc, counter, author, date_iso, p_idx, phrase, text):
     `phrase` when hidden chars (e.g. 》）—) may be present.
 
     插入内容**继承锚点 run 的字符格式**（字体/字号/加粗/字符样式），
-    与人工在 Word 里输入的观感一致（1.1.1 修掉的缺陷）。
+    与人工在 Word 里输入的观感一致（1.1.0 修掉的缺陷）。
     """
     p = doc.paragraphs[p_idx]
     for run in p.runs:
@@ -341,7 +346,7 @@ def verify(path, expect_ins=None, expect_del=None, check_fmt=False,
     if expect_del is not None:
         assert len(dels) == expect_del, f"expected {expect_del} w:del, got {len(dels)}"
     if check_fmt:
-        # 格式继承回归（1.1.1 修掉的缺陷）：插入的 run 若不带 rPr，
+        # 格式继承回归（1.1.0 修掉的缺陷）：插入的 run 若不带 rPr，
         # 文字会掉回文档默认字体——与人工在 Word 里输入的观感不一致。
         # 判据：插入 run 与它**前一个普通 run** 的格式指纹必须一致；
         # 前一个 run 本就无直接格式时，两者都靠段落样式，视为一致。
@@ -359,7 +364,7 @@ def verify(path, expect_ins=None, expect_del=None, check_fmt=False,
             assert sig_ins == sig_prev, \
                 f"插入内容未继承当前格式: {sig_ins} != {sig_prev}"
     if check_comments:
-        # 批注结构回归（1.2.0）：批注要动四个地方，缺一个 Word/WPS 就打不开
+        # 批注结构回归（1.1.0）：批注要动四个地方，缺一个 Word/WPS 就打不开
         # 或看不到批注——comments.xml / [Content_Types].xml / document.xml.rels /
         # document.xml 的锚点。逐项断言，别等打开才发现。
         names = z.namelist()
@@ -390,7 +395,7 @@ def verify(path, expect_ins=None, expect_del=None, check_fmt=False,
         assert s_ids == e_ids, f"commentRangeStart/End 不配对: {s_ids} vs {e_ids}"
         assert r_ids == c_ids, f"commentReference 与 comments.xml 不匹配: {r_ids} vs {c_ids}"
         # 顺序：每条批注的 reference 必须排在其 commentRangeEnd **之后**
-        # （写反了 WPS 显示不出批注——1.2.0 实战踩到）
+        # （写反了 WPS 显示不出批注——1.1.0 实战踩到）
         for p in body.iter(qn("w:p")):
             ended = set()
             for k in p:
@@ -414,18 +419,62 @@ def _die(msg, hint):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        _die("参数不足", "用法：python3 apply_track_changes.py 原件.docx 输出.docx [作者] [日期ISO]。前两个路径必填，含空格用引号包住。")
-    src, out = sys.argv[1], sys.argv[2]
-    author = sys.argv[3] if len(sys.argv) > 3 else "审校"
-    date_iso = sys.argv[4] if len(sys.argv) > 4 else "2026-07-23T09:00:00Z"
+    args = sys.argv[1:]
+
+    def _take(flag):
+        """取出 `flag 其值` 对并从位置参数里删掉；返回 None 表示未给。"""
+        if flag in args:
+            i = args.index(flag)
+            if i + 1 >= len(args):
+                _die(f"{flag} 缺少取值", f"{flag} 后必须跟一个值，如 {flag} 5。")
+            v = args[i + 1]
+            del args[i:i + 2]
+            return v
+        return None
+
+    p_idx = _take("--p-idx")
+    phrase = _take("--phrase")
+    text = _take("--text")
+    del_mode = "--del" in args
+    if del_mode:
+        args.remove("--del")
+
+    if p_idx is None and phrase is None and text is None and not del_mode:
+        insert_op = None            # 未给任何操作参数 → 只保存并校验
+    else:
+        # 给了操作参数：插入模式三样齐（--p-idx/--phrase/--text），
+        # 勘误模式（--del）两样齐（--p-idx/--phrase；--text 缺省=纯删除）
+        if p_idx is None or phrase is None or (text is None and not del_mode):
+            _die("修订参数不完整",
+                 "插入：--p-idx 段落号 --phrase 锚点短语 --text 新增文字；"
+                 "勘误（--del）：--p-idx 段落号 --phrase 待删短语 [--text 替换文字，缺省=纯删除]。"
+                 "例：python3 apply_track_changes.py 原件.docx 输出.docx "
+                 "--p-idx 5 --phrase \"规划的任务分解和具体落实。\" --text \"（补充说明）\"")
+        try:
+            p_idx = int(p_idx)
+        except (TypeError, ValueError):
+            _die("--p-idx 不是整数", f"实得 {p_idx!r}；段落号从 0 起计。")
+        insert_op = (p_idx, phrase, text, del_mode)
+
+    if len(args) < 2:
+        _die("参数不足", "用法：python3 apply_track_changes.py 原件.docx 输出.docx [作者] [日期ISO] [--p-idx N --phrase 短语 --text 新文 | --del]。前两个路径必填，含空格用引号包住。")
+    src, out = args[0], args[1]
+    author = args[2] if len(args) > 2 else "审校"
+    date_iso = args[3] if len(args) > 3 else "2026-07-23T09:00:00Z"
     try:
         doc, counter, a, d = open_for_revision(src, author, date_iso)
-        # Example: insert an addition after the first occurrence of a phrase.
-        # apply(doc, counter, a, d, p_idx=5, phrase="规划的任务分解和具体落实。",
-        #       text="（此处为示例插入内容）")
-        doc.save(out)
-        verify(out)
+        if insert_op is None:
+            doc.save(out)
+            verify(out)
+            print("ℹ 仅保存并校验，未修改正文（真插入请加 --p-idx N --phrase 短语 --text 新文；勘误加 --del）")
+        else:
+            p_idx, phrase, text, del_mode = insert_op
+            if del_mode:
+                apply_del(doc, counter, a, d, p_idx, phrase, text or "")
+            else:
+                apply(doc, counter, a, d, p_idx, phrase, text)
+            doc.save(out)
+            verify(out)
     except FileNotFoundError:
         _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。")
     except AssertionError as e:

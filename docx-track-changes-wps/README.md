@@ -16,11 +16,22 @@ WPS 对修订 XML 极其敏感，手写的 `w:ins`/`w:del` 很容易触发"彩�
 
 完整清单、操作流程和验证方法见 [SKILL.md](./SKILL.md)。
 
+## 环境
+
+Python 3.8+ 与 python-docx、lxml：
+
+```bash
+pip install python-docx lxml
+```
+
+安装与运行均在本地完成，无需网络。
+
 ## 使用
 
 把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`），脚本在 `scripts/apply_track_changes.py`。
 
 ## 发布记录
+- **2026-10-31 v1.1.1（GitHub，SkillHub 同号）**：口径修补＋CLI 做实——更正「未验证声明」中“全程不用 `w:del`”的旧表述（纯插入场景不用，勘误场景见「勘误与替换」节）；脚本注释里的遗留版本号改为不绑定具体版本（随 SKILL.md 头部），不再逐版改注释；README 新增「环境」段（依赖安装说明）；批注 CLI 新增 `--phrase`（必填挂载锚点）与 `--anchor`（另锚）双参数，不再缺省静默取首 run；**修订主脚本 CLI 支持真插入**——`--p-idx N --phrase 短语 --text 新文` 走 `apply()` 实际写入 w:ins（`--del` 走 `apply_del()` 勘误），不给操作参数时明示“仅保存并校验，未修改正文”
 - **2026-10-30 v1.1.0（GitHub，SkillHub 同号）**：三项合并发布。①**实战勘误扩展**——新增 `apply_del()`（按锚点短语删旧换新）、`del_insert()`（run 内字符区间删除并可插入替换）、`split_insert()`（段内字符偏移插入），以 10-27 真实公文修订脚本为基础整理入技能；`make_del()` 自动将 `w:t` 转为 `w:delText`；`verify()` 的 `w:ins`/`w:del` **合查** id 唯一性、断言 `w:del` 内不得残留 `w:t`、新增 `expect_ins`/`expect_del` 数量断言。②**格式继承**——修一个实战暴露的观感缺陷：插入的文字不继承当前格式（根因：`make_ins()` 造的 `<w:r>` 不带 `w:rPr`，而公文正文普遍用直接格式，插入内容掉回文档默认字体，与人工在 Word 里输入的观感不符）。新增 `_rpr_for()`（run 自身 → 段落标记 → 段落样式三级取值），`apply()`/`split_insert()`/`del_insert()` 分别继承锚点 run、被拆 run、**被替换文字**的格式；继承时剔除 `w:rPrChange`；**更正「彩虹圈规避清单」第 5 条**（原写"插入的 `w:r` 不带 `w:rPr`"，把格式不继承固化成了规范，现更正为"不得凭空造 rPr，但必须继承锚点已有的 rPr"）。③**批注**——补齐人工审校的另一半：修订标记说"改了"，批注说"为什么改"。新增 `add_comment.py`（批注要动四个部件：`word/comments.xml`、`[Content_Types].xml`、`document.xml.rels`、`document.xml` 锚点；python-docx 无内置 comments part，故用保存后 zip 后处理；锚点**穿透 `w:ins`/`w:del`**，"给某处删除写批注"时批注范围包住整个修订标记）与 `export_markup.py`（导出修订标记表＋批注表为 Markdown，即"修改意见报送"要交的那份清单）。`verify()` 新增 `check_fmt`/`check_comments` 两项断言；`self_test.py` 增至六场景。**实测**：35 段真实公文上 `w:ins=3 / w:del=2 / 批注 3` 全绿；格式继承 A/B 对照（修复前插入 run 无 rPr → 修复后 `fonts=仿宋_GB2312 / sz=32`，与同段正文完全一致）
 - **2026-10-15 v1.0.6（GitHub，SkillHub 同号）**：SKILL.md 新增「样例：一次插入前后的 XML（真实产物）」节（w:ins 结构与 author/date 直观可见）
 - **2026-10-15 v1.0.5（GitHub，SkillHub 同号）**：CLI 入口新增中文友好报错（缺参数、找不到文件、无效 docx、校验未通过逐项给出下一步动作）；SKILL.md 新增「常见问题 FAQ」节

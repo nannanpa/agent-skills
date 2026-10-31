@@ -1,4 +1,4 @@
-// ocr_vision.swift — macOS 自带 Vision 框架的离线中文 OCR（pdf-to-md 1.2.0 配套）
+// ocr_vision.swift — macOS 自带 Vision 框架的离线中文 OCR（pdf-to-md 1.2.1 配套）
 //
 // 为什么需要它：纯扫描件 PDF 没有文字层，第 1 步 pdf_extract.py 只能提取出空文本。
 // 常见做法是装 PaddleOCR / Tesseract——都要额外依赖，且默认装不上。

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""导出 .docx 的修订与批注为 Markdown 清单——docx-track-changes-wps 1.2.0 配套。
+"""导出 .docx 的修订与批注为 Markdown 清单——docx-track-changes-wps 配套脚本，版本随 SKILL.md 头部。
 
 为什么需要它：技能的应用场景写的是"修改意见报送"——审校完要给人一份
 **看得懂的清单**，而不是丢一个带修订轨的 docx 让对方自己找。

@@ -41,7 +41,7 @@ refs/
 
 （索引与回执的文件名带版本名——同父目录并存多个版本时互不覆盖。）
 
-_manifest.json 十一字段：`book`、`source`（动态记录真实来源，`--source` 可覆写）、`source_sha256`（**源文件**指纹，对版本）、`source_encoding`、`content_sha256`（**实际入库正文**指纹，1.1.0 新增）、`content_stage`（正文处理阶段，1.1.0 新增）、`ingested_at`、`t2s`、`opencc_version`、`chapters`、`total_chars`、`files`（全部分册清单）。
+_manifest.json 字段数以脚本代码为准：**章回体 12 字段 / 编年体 14 字段**。公共 10 键：`book`、`source`（动态记录真实来源，`--source` 可覆写）、`source_sha256`（**源文件**指纹，对版本）、`source_encoding`、`content_sha256`（**实际入库正文**指纹，1.1.0 新增）、`content_stage`（正文处理阶段，1.1.0 新增）、`ingested_at`、`t2s`、`opencc_version`、`files`（全部分册清单）；章回体专有：`chapters`、`total_chars`；编年体专有：`volumes`、`total_chars_main`、`total_chars_notes`、`strip_brackets`。
 
 > **为什么两个指纹**：底本经 `--skip-head/--skip-tail` 切除、`--t2s` 转换、样板行与【】夹注剥离后，入库文本与源文件已不是一回事。只记 `source_sha256` 等于“能证明源、不能证明成品”——核对入库文本要比 `content_sha256`，追溯来源才比 `source_sha256`。
 
@@ -71,6 +71,7 @@ GitHub：https://github.com/nannanpa/agent-skills/tree/main/guji-yuliao ——Is
 
 ## 发布记录
 
+- 1.1.1（2026-10-31）口径修补，脚本零改动——manifest 字段数统一为「章回体 12 字段 / 编年体 14 字段」（原 SKILL 写九、README 写十一，均与代码不符；补公共 10 键＋专有键对照表）；SKILL.md 增 8 行目录
 - 1.1.0（2026-10-30）复审“不通过”项清零 ＋ C 级 4 项落地。**补 3 措辞重写**：删掉 1.0.9 的两条假出路（「按回号补齐」会致回号与原书错位、「改用 build_json.py 录入」指向同样只收 1..N 的死路），改为“下载截断优先续传、节选本明确不支持、**劝阻重编号**”，并附**命中行号**便于逐行核对。**C3 响亮误拒**：回目判据改「先严后宽」（严格式只认全角空/冒号/行尾，严格式 0 单元才放宽并告警）——旧版会把正文里的“第十二回 且介…”当回目，合法底本因一行正文被判 exit 2。**C4**：`--title-override` 新标题含冒号不再抛 ValueError（只切第一个冒号），参数错改为人话报错退 1。**C1/C2 指纹边界**：回执新增 `content_sha256` ＋ `content_stage`，从“只证源”扩到“源与成品双证”。另修 build_json 索引头“简体”硬编码（未转简时改为“原文照录”）。
 - 1.0.9（2026-10-21）外审必改 5 项代码级修复（假绿灯三处：--probe 静默成功、build_json --probe 空转却全量写盘、参数错退进"数据预警"码位；另修同父目录多版本索引被覆盖、兑现 --skip-head/--skip-tail 幽灵参数）＋ 文档补强 5 项（安装自检前置、两种源模式对照表前置、JSON 字段对应表、触发说法补 JSON、ASCII/全角数字回目）＋ 取底本检查清单（附录"下载重试"提案否掉——本技能零网络，下载完整性划归使用者步骤）
 - 1.0.8（2026-10-20）数字写法扩容：cn2int 支持大写数字与老书写法（廿/卅/百廿/壹贰叁…）
