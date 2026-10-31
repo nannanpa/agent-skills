@@ -32,11 +32,19 @@ OFFICIAL_ORGS = {
 }
 
 # 人工核验过的自建/改造技能名单（2026-10-12 首轮全量核验固化；新自建技能手动加进来）
+# 注意：本机命名空间为 indiv-mabin 的技能已由 OWN_NAMESPACE 数据驱动识别，本名单是"无 meta 的本地自建技能"兜底。
 SELF_BUILT = {
     "zhiduku", "hongloumeng", "pdf-to-md", "read-oversized-image",
     "msd-home-manual", "relation-scope", "docx-template-fill",
-    "docx-track-changes-wps", "skill-origin", "maoxuan",
+    "docx-track-changes-wps", "skill-origin", "maoxuan", "skill-miner",
 }
+
+# 用户本人在 SkillHub 的发布命名空间（self-built 的数据驱动信号，无需手维护名单）
+OWN_NAMESPACE = "indiv-mabin"
+
+# 市场分发记录（marketplace）的二选一锚点：满足其一即视作有市场分发背书。
+# 但二者均为本地未签名 meta，可被伪造，故判词必须显式声明"可被伪造、不构成授权依据"（C1）。
+MARKET_EVIDENCE = ("skillId", "installedContentHash")
 
 # 正文链接行中出现这些词 → 视为"来源声明"而非随意提及
 SOURCE_HINT = re.compile(r"based on|author|来源|源自|出处|fork|origin|adapted|汉化|原文", re.I)
@@ -44,19 +52,14 @@ SOURCE_HINT = re.compile(r"based on|author|来源|源自|出处|fork|origin|adap
 REPO_RE = re.compile(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?=[/\s\"'\)\]]|$)")
 SKIP_REPO = ("user-attachments", "github.com/search")
 
-NAME_RE = re.compile(r"[-_ ]")
-
-
-def name_of(s: str) -> str:
-    """技能名/仓库名归一化（小写、去连字符），用于同名相关性判断。"""
-    return NAME_RE.sub("", s.lower())
-
 
 def collect_repos(skill_dir: Path, skill_name: str):
     """提取 GitHub 仓库，区分'来源链接'与'提及链接'。
 
-    来源判定：① SKILL.md frontmatter 的 author 字段 ② 链接所在行含来源声明词
-    ③ 仓库名与技能名同名（归一化后互相包含）。其余为提及，不参与档位判定。
+    来源判定仅认两处：① SKILL.md frontmatter 的 author 字段 ② 链接所在行含来源声明词
+    （SOURCE_HINT）。不再做"仓库名/技能名同名（含）"的推断（C2：该推断只需发布者起同名即可
+    把"提及"升格为来源、绕过 is_mention_only 拿到 A+，属可被利用的薄弱点）。其余为提及，
+    不参与档位判定。
     """
     source_repos, mention_repos = [], []
     for name in ("SKILL.md", "README.md", "readme.md"):
@@ -83,9 +86,10 @@ def collect_repos(skill_dir: Path, skill_name: str):
                 # gist 链接（第二段为长哈希）不是仓库
                 if re.fullmatch(r"[0-9a-f]{16,}", repo.split("/")[1]):
                     continue
-                is_source = bool(SOURCE_HINT.search(line)) or (
-                    name_of(skill_name) in name_of(repo) or name_of(repo.split("/")[1]) in name_of(skill_name)
-                )
+                # 来源只认两处：① frontmatter author URL（已在上方处理）② 含来源声明词的行（SOURCE_HINT）。
+                # 删除"仓库名/技能名同名（含）"的推断（C2）：该推断只需发布者起同名即可把"提及"升格为
+                # 来源、绕过 is_mention_only 拿到 A+，属可被利用的薄弱点。
+                is_source = bool(SOURCE_HINT.search(line))
                 (source_repos if is_source else mention_repos).append(repo)
     # 去重保序，且提及不重复计入来源
     dedup = lambda lst: list(dict.fromkeys(lst))  # noqa: E731
@@ -128,24 +132,56 @@ def audit_skill(skill_dir: Path) -> dict:
     # 1) 安装元数据
     meta_f = skill_dir / "_skillhub_meta.json"
     installed_at = None
+    meta = None
     if meta_f.exists():
         try:
-            meta = json.loads(meta_f.read_text())
+            loaded = json.loads(meta_f.read_text())
+        except Exception:
+            loaded = None  # 解析失败（损坏）：当无 meta，走正常 D 分支，不崩批
+        if isinstance(loaded, dict):
+            meta = loaded
             r["source"] = meta.get("source")
             r["version"] = meta.get("version")
             if meta.get("installedAt"):
-                installed_at = int(meta["installedAt"]) / 1000
-                r["installed"] = time.strftime("%Y-%m-%d", time.localtime(installed_at))
-        except Exception:
-            pass
+                try:
+                    installed_at = int(meta["installedAt"]) / 1000
+                    r["installed"] = time.strftime("%Y-%m-%d", time.localtime(installed_at))
+                except Exception:
+                    pass
+        elif loaded is not None:
+            # 成功解析但非 dict（列表/字符串）——属异常输入，交由 main() 的 try/except
+            # 降级为「？ 核验异常」，既不静默吞掉、也不崩整批（F-3 / P0-4）
+            raise ValueError(f"_skillhub_meta.json 非 dict（实为 {type(loaded).__name__}），核验中止")
 
-    # 2) 自建名单（人工核验固化）
-    has_ledger = (skill_dir / "UPSTREAM-MERGE.md").exists()
+    # 2) 自建判定（数据驱动优先，手维护名单兜底；全部为本地证据、可被伪造）
+    has_ledger = (skill_dir / "UPSTREAM-MERGE.md").exists() and \
+        (skill_dir / "UPSTREAM-MERGE.md").stat().st_size > 0  # 空台账不计数（P0-2）
     ledger_note = "；本地有改造，上游更新走 UPSTREAM-MERGE 三方合并" if has_ledger else ""
     source_repos, mention_repos = collect_repos(skill_dir, skill_dir.name)  # 只收集一次
-    if skill_dir.name in SELF_BUILT or (has_ledger and not r["source"]):
+    # 权威名：优先 _skillhub_meta.json 的 slug（安装源自带），否则用目录名本身（不剥离 __ 后缀）
+    canonical = (meta or {}).get("slug") or skill_dir.name
+    # meta 自洽校验：slug 须与目录名同源（目录名 == slug 或 == slug + "__<后缀>"）；
+    # is_own_publish 要求 slug+namespace 双字段齐全（杜绝仅 slug 伪造命中白名单，A-2）。
+    _slug = (meta or {}).get("slug")
+    slug_ok = bool(_slug) and (
+        skill_dir.name == str(_slug)
+        or re.fullmatch(re.escape(str(_slug)) + r"__.+", skill_dir.name) is not None)
+    is_own_publish = (r.get("source") == "skillhub" and slug_ok
+                      and (meta or {}).get("namespace")
+                      and str((meta or {}).get("namespace")).strip().lower() == OWN_NAMESPACE.lower())
+    own_evidence = []
+    if canonical in SELF_BUILT and not meta:   # 仅"无 meta"时信任手维护白名单；有 meta 则一律走自洽校验
+        own_evidence.append("名单")
+    if is_own_publish:
+        own_evidence.append("meta 命名空间")
+    if has_ledger and not r["source"]:
+        own_evidence.append("改造台账")
+    if own_evidence:
+        r["source_evidence"] = own_evidence
         r["tier"] = "自建/改造"
-        r["verdict"] = "原创度100%，不存在正版问题；改造类上游更新走 UPSTREAM-MERGE 三方合并"
+        r["verdict"] = ("自建/改造（依据：%s；均为本地证据、未与平台核对，可被伪造）"
+                        "——未见正版冲突，但本判词不证明原创，也不构成授权依据"
+                        % "、".join(own_evidence))
         # 改造类若能定位上游，附上上游信息（不参与档位）
         if source_repos:
             info0 = fetch_repo(source_repos[0])
@@ -161,6 +197,10 @@ def audit_skill(skill_dir: Path) -> dict:
     # 3) GitHub 溯源：仅"来源链接"参与判定，"提及链接"只展示
     repos = source_repos or mention_repos
     is_mention_only = not source_repos and bool(mention_repos)
+    if is_mention_only:   # 提及不得进档位（F-1 / P0-3）：正文仅提及、未声明上游，需人工确认
+        r["tier"] = "？ 来源未声明"
+        r["verdict"] = "正文仅提及外部仓库、未声明其为本技能来源；提及不参与档位判定，需人工确认"
+        return r
 
     best = None  # (repo, info, parent)
     for repo in repos:
@@ -183,9 +223,17 @@ def audit_skill(skill_dir: Path) -> dict:
             best = (repo, info, parent)
 
     if best is None:
-        if r["source"] == "marketplace":
+        v = r["version"] or "未知版本"
+        if r["source"] == "marketplace" and meta and not meta.get("preinstalledTemplate") \
+                and any(meta.get(k) for k in MARKET_EVIDENCE):
             r["tier"] = "A 官方市场"
-            r["verdict"] = f"CodeBuddy 官方市场分发(v{r['version']})，官方背书"
+            r["verdict"] = f"CodeBuddy 官方市场分发(v{v})，市场分发记录（本地声明，未与平台核对、可被伪造）"
+        elif r["source"] == "marketplace":
+            r["tier"] = "D 无背书"
+            r["verdict"] = "市场分发记录（本地声明），但缺 skillId 或属预置模板，不视作官方背书；从没用过→建议卸载，要用→先过 skills-sec-audit"
+        elif source_repos:   # 声明了来源但全部不可解析（改名/删除/网络受限）
+            r["tier"] = "？ 来源声明未解析"
+            r["verdict"] = "声明了上游来源但无法解析（可能改名/删除/网络受限）；需人工确认"
         else:
             r["tier"] = "D 无背书"
             r["verdict"] = "无来源线索；从没用过→建议卸载，要用→先过 skills-sec-audit"
@@ -219,9 +267,10 @@ def audit_skill(skill_dir: Path) -> dict:
     elif stars >= TOP_STAR:
         r["tier"] = "B 行业顶流"
         r["verdict"] = f"上游 {stars}★ 非fork，已是最权威版本" + mention_note
-    elif r["source"] == "marketplace" and not is_mention_only:
+    elif r["source"] == "marketplace" and not is_mention_only and meta and not meta.get("preinstalledTemplate") \
+            and any(meta.get(k) for k in MARKET_EVIDENCE):
         r["tier"] = "A 官方市场"
-        r["verdict"] = f"CodeBuddy 官方市场分发(v{r['version']})，上游 {stars}★"
+        r["verdict"] = f"CodeBuddy 官方市场分发(v{r['version'] or '未知版本'})，市场分发记录（本地声明，未与平台核对、可被伪造），上游 {stars}★"
     elif stars >= LOW_STAR:
         r["tier"] = "B- 中坚来源"
         r["verdict"] = f"上游 {stars}★，有一定社区背书" + mention_note
@@ -251,7 +300,8 @@ def main():
         args = args[:i] + args[i + 2:]
     arg = args[0] if args else "all"
     targets = ([base / arg] if arg != "all"
-               else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()))
+               else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()
+                           and not p.name.startswith(".") and ".bak" not in p.name))
     if not targets:
         print(f"未找到技能: {arg}（扫描目录：{base}）")
         return
@@ -264,7 +314,11 @@ def main():
     n = len(targets)
     for i, d in enumerate(targets, 1):
         print(f"[{i}/{n}] 核验中: {d.name} …", file=sys.stderr, flush=True)  # 进度走 stderr，不污染报告
-        r = audit_skill(d)
+        try:
+            r = audit_skill(d)
+        except Exception as e:   # 单技能坏 meta/异常 → 降级而非中断整批（P0-4 / F-3）
+            print(f"| {d.name} | — | — | **？ 核验异常** | 核验出错：{type(e).__name__}: {e} |")
+            continue
         # 多仓库全部展示（来源优先，已在前），用 <br> 换行保证 md 表格可读
         lines = [f"{x['repo']}({x['stars']}★)" for x in r["repos"]]
         repo_str = "<br>".join(lines) if lines else "—"
