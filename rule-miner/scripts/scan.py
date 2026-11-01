@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-rule-miner 盘点脚本 v2.2.1：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
+rule-miner 盘点脚本 v2.2.3：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
 设计原则（来自实战）：不做语义解析，只统计字节、行数与文件名；计行需逐行读取，
 故 I/O 与文件总字节同阶（但不进模型上下文）。
 
@@ -17,7 +17,7 @@ P0 整改（2026-11-01 DSH 外审回函）：
   - P0-4 os.walk onerror 逐目录告警；kb_check 增 KB_ERR（grep 不可用/超时/报错）
 
 P2 发布前检查整改（2026-11-01，2.2.0 首发；2.2.1 仅改名/补四步描述，内容不变）：
-  - ⑤ 新增 --version（argparse action=version，打印 v2.2.1）
+  - ⑤ 新增 --version（argparse action=version，打印 v2.2.3）
   - ⑥ NOISE_HINTS 子串误杀改为目录边界匹配（novel_approaches.md 等正规文件不再被误跳）
   - ⑦ --out 报告补 header（文本头两行 + JSON meta：tool/version/root/generated_at）
 
@@ -39,12 +39,21 @@ from datetime import datetime
 DEFAULT_ROOT = os.path.expanduser("~/WorkBuddy")
 
 # 排除：全局记忆结构本身 + 已知噪声目录（walk 时不向下钻取）
+# 排除目录：walk 时不向下钻取。每条均附依据，避免误伤有效资产（P1-1, 2.2.3 审计）
 EXCLUDE_DIRS = [
-    "记忆分册",
-    "node_modules", "dist", "novels", "chapters", "works",
-    "references", "docs", "blob", "archive", "__pycache__", "_orig",
+    "记忆分册",          # 全局记忆本体，非待盘点资产；计入会自指
+    "node_modules",      # 依赖库，与知识资产无关
+    "dist",              # 构建产物/发布暂存
+    "novels", "chapters", "works",  # 小说章节等非知识资产噪声
+    "references",        # 文献/外部引用库噪声
+    "docs", "blob", "archive",  # 文档集/二进制/归档噪声
+    "__pycache__", "_orig",     # 缓存/原始备份
 ]
 EXCLUDE_FILES = {"INDEX.md", "交接-当前状态.md", "MEMORY.md"}
+
+# 单文件体积上限：超过则跳过整读，防大目录/超大文件卡死（P1-2, 2.2.3）
+MAX_FILE_BYTES = 4 * 1024 * 1024          # 4 MB
+HEAD_LINES = 40                           # 顺带采集首段行数，供内容指纹二次匹配
 
 # 五类资产 → 文件名关键词
 ASSET_TYPES = {
@@ -86,14 +95,23 @@ def should_skip(path: str) -> bool:
     return False
 
 
-def asset_hint(rel: str) -> str:
-    """按相对路径（含目录名）映射到五类资产之一；只命中通用规则词则标'未分类(规则类)'。"""
+def asset_hint(rel: str, head: str = "") -> tuple:
+    """返回 (资产类型, 命中来源)。
+    先按相对路径（含目录名）匹配；未命中时再用文件首段内容指纹（前 HEAD_LINES 行）做二次匹配，
+    降低纯文件名匹配导致的漏提（如 notes.md 含真规则）与误提（如 规则总结.md 实为待办）。
+    来源 ∈ {name, content, ''}。"""
     for t, pat in ASSET_TYPES.items():
         if re.search(pat, rel):
-            return t
+            return t, "name"
     if re.search(RULE_KW, rel):
-        return "未分类(规则类)"
-    return ""
+        return "未分类(规则类)", "name"
+    if head:
+        for t, pat in ASSET_TYPES.items():
+            if re.search(pat, head):
+                return t, "content"
+        if re.search(RULE_KW, head):
+            return "未分类(规则类)", "content"
+    return "", ""
 
 
 def matched_kw(rel: str) -> list:
@@ -181,7 +199,7 @@ def main() -> None:
     ap.add_argument("--out", metavar="FILE",
                     help="将报告写入文件（不指定 --json 时为文本；指定则为 JSON）")
     ap.add_argument("--version", action="version",
-                    version="rule-miner 盘点脚本 v2.2.1")
+                    version="rule-miner 盘点脚本 v2.2.3")
     args = ap.parse_args()
 
     # ① 工程级参数校验：中文友好报错 + 非零退出码
@@ -213,7 +231,9 @@ def main() -> None:
         sys.exit(3)
 
     files = []          # 候选清单（已读体积/行数）
-    all_dist = Counter()  # 全盘 .md 分布（含噪声区，每个 .md 都计，不只候选）
+    skipped_excluded = 0  # 被 should_skip 排除的文件数（噪声目录/文件）
+    skipped_large = 0   # 超 MAX_FILE_BYTES 跳过的文件数
+    all_dist = Counter()  # 全盘 .md 分布（不含 EXCLUDE_DIRS 已排除的噪声目录；每个幸存 .md 都计，不只候选）
     all_count = 0
     skipped_dirs = []   # 权限/占用不可读的目录
     kb_err = False      # 知识库加载/核验是否失败（统一置位，不冒充 NEW）
@@ -238,15 +258,28 @@ def main() -> None:
             all_dist[top] += 1
             all_count += 1
             if should_skip(full):
+                skipped_excluded += 1
                 continue
             try:
                 sz = os.path.getsize(full)
-                with open(full, "r", encoding="utf-8", errors="ignore") as fh:
-                    lines = sum(1 for _ in fh)
             except OSError as e:
                 print(f"⚠️ 跳过无法读取的文件 {full}：{e}", file=sys.stderr)
                 continue
-            atype = asset_hint(rel)
+            if sz > MAX_FILE_BYTES:
+                skipped_large += 1
+                continue  # 超大文件跳过整读，防卡死
+            try:
+                head_buf = []
+                lines = 0
+                with open(full, "r", encoding="utf-8", errors="ignore") as fh:
+                    for i, ln in enumerate(fh):
+                        lines += 1
+                        if i < HEAD_LINES:
+                            head_buf.append(ln)
+            except OSError as e:
+                print(f"⚠️ 跳过无法读取的文件 {full}：{e}", file=sys.stderr)
+                continue
+            atype, provenance = asset_hint(rel, "".join(head_buf))
             if not atype:
                 continue  # 非候选，跳过
             if kb_dir:
@@ -257,7 +290,7 @@ def main() -> None:
                     grade = grade_conflict(matched_kw(rel), snippet) if status == "KB_HIT" else ""
             else:
                 status, snippet, source, grade = "—", "", "", ""
-            files.append((rel, sz, lines, atype, status, snippet, source, grade))
+            files.append((rel, sz, lines, atype, provenance, status, snippet, source, grade))
 
     # P0-4：逐目录权限告警（不静默漏扫）
     if skipped_dirs:
@@ -274,7 +307,7 @@ def main() -> None:
         out = {
             "meta": {
                 "tool": "rule-miner scan.py",
-                "version": "2.2.1",
+                "version": "2.2.3",
                 "root": root,
                 "generated_at": datetime.now().isoformat(timespec='seconds'),
             },
@@ -284,15 +317,15 @@ def main() -> None:
             "all_distribution": dict(all_dist.most_common(40)),
             "candidate_distribution": dict(dist.most_common(40)),
             "candidates": [
-                {"path": r, "bytes": s, "lines": l, "asset_type": t,
+                {"path": r, "bytes": s, "lines": l, "asset_type": t, "provenance": p,
                  "kb": k, "snippet": sn, "source": so, "grade": g}
-                for r, s, l, t, k, sn, so, g in sorted(files, key=lambda x: -x[1])
+                for r, s, l, t, p, k, sn, so, g in sorted(files, key=lambda x: -x[1])
             ],
         }
         text = json.dumps(out, ensure_ascii=False, indent=2)
     else:
         lines_out = [f"# rule-miner 盘点报告",
-                     f"# 版本 v2.2.1 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
+                     f"# 版本 v2.2.3 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
                      "",
                      "=== 全盘 .md 分布（不含已排除的噪声目录）===",
                      f"  [汇总] 全盘 .md 总数 {all_count}（EXCLUDE_DIRS 如 novels/chapters/docs/references/dist 等已在遍历阶段剪枝，不计入；该数通常小于 find 全盘 .md 数，属正常）"]
@@ -303,10 +336,11 @@ def main() -> None:
         for k, v in dist.most_common(40):
             lines_out.append(f"  {v:5d}  {k}")
         lines_out.append(f"\n=== 知识资产候选（{len(files)} 个，大→小）{kb_label} ===")
-        for r, s, l, t, k, sn, so, g in sorted(files, key=lambda x: -x[1]):
+        for r, s, l, t, p, k, sn, so, g in sorted(files, key=lambda x: -x[1]):
             extra = f" 冲突分级={g} 原文片段={sn} 出处={so}" if k == "KB_HIT" else ""
-            lines_out.append(f"  {s:8d}B {l:5d}行  [{t}] {k:7s} {r}{extra}")
-        lines_out.append(f"\n[汇总] 候选总数 {len(files)} ｜ 全盘 .md 总数 {all_count}")
+            src_tag = " [内容命中]" if p == "content" else ""
+            lines_out.append(f"  {s:8d}B {l:5d}行  [{t}] {k:7s} {r}{src_tag}{extra}")
+        lines_out.append(f"\n[汇总] 候选总数 {len(files)} ｜ 全盘 .md 总数 {all_count} ｜ 因排除跳过 {skipped_excluded} 个 ｜ 因超大跳过 {skipped_large} 个")
         text = "\n".join(lines_out)
 
     # ③ --out：扫描产物 sink（真实落盘，非虚设）
