@@ -37,14 +37,26 @@ SELF_BUILT = {
     "zhiduku", "hongloumeng", "pdf-to-md", "read-oversized-image",
     "msd-home-manual", "relation-scope", "docx-template-fill",
     "docx-track-changes-wps", "skill-origin", "maoxuan", "skill-miner",
+    # 2026-11-02 补：rule-miner 由 agent 自建（SKILL.md 载 agent_created: true），
+    # 原漏登记导致被判 D 档无背书——自建技能被误判成"来历不明"是溯源工具的反向失真。
+    "rule-miner",
 }
+
+# 市场件元数据的两种落地形态（2026-11-02 实证补）：
+#   ① _skillhub_meta.json —— SkillHub 安装时写入，含 slug/namespace/skillId/installedAt
+#   ② _meta.json          —— 平台市场分发写入，含 ownerId/publishedAt/slug/version
+# 原实现只认 ①，导致 ② 形态的市场件（如 smart-charts）被当成"无任何来源线索"而误判 D 档。
+# 两种形态都是本地未签名声明、可被伪造，故判词仍须声明"未与平台核对、不构成授权依据"（C1）。
+META_FILENAMES = ("_skillhub_meta.json", "_meta.json")
 
 # 用户本人在 SkillHub 的发布命名空间（self-built 的数据驱动信号，无需手维护名单）
 OWN_NAMESPACE = "indiv-mabin"
 
-# 市场分发记录（marketplace）的二选一锚点：满足其一即视作有市场分发背书。
-# 但二者均为本地未签名 meta，可被伪造，故判词必须显式声明"可被伪造、不构成授权依据"（C1）。
-MARKET_EVIDENCE = ("skillId", "installedContentHash")
+# 市场分发记录（marketplace）的锚点：满足其一即视作有市场分发背书。
+# ① skillId / installedContentHash —— SkillHub 安装形态（_skillhub_meta.json）
+# ② ownerId / publishedAt       —— 平台市场分发形态（_meta.json，2026-11-02 实证补）
+# 均为本地未签名 meta，可被伪造，故判词必须显式声明"可被伪造、不构成授权依据"（C1）。
+MARKET_EVIDENCE = ("skillId", "installedContentHash", "ownerId", "publishedAt")
 
 # 正文链接行中出现这些词 → 视为"来源声明"而非随意提及
 SOURCE_HINT = re.compile(r"based on|author|来源|源自|出处|fork|origin|adapted|汉化|原文", re.I)
@@ -127,34 +139,83 @@ def fetch_repo(full_name: str):
         return None
 
 
+def detect_agent_created(skill_dir: Path) -> bool:
+    """检测 SKILL.md frontmatter 是否声明 agent_created: true。
+
+    只认 frontmatter 首个 --- 区块内的 agent_created 字段，避免正文里出现同名字样被误判。
+    """
+    f = skill_dir / "SKILL.md"
+    if not f.exists():
+        return False
+    try:
+        text = f.read_text(errors="ignore")
+    except Exception:
+        return False
+    if not text.startswith("---"):
+        return False
+    end = text.find("\n---", 3)
+    if end < 0:
+        return False
+    fm = text[:end]
+    m = re.search(r"^agent_created:\s*(true|True|yes)", fm, re.M)
+    return bool(m)
+
+
 def audit_skill(skill_dir: Path) -> dict:
     """核验单个技能目录，返回结果 dict。"""
     r = {"name": skill_dir.name, "source": None, "version": None,
          "installed": None, "repos": [], "tier": "?", "verdict": "", "upstream_newer": False}
 
     # 1) 安装元数据
-    meta_f = skill_dir / "_skillhub_meta.json"
+    # 两种落地形态：_skillhub_meta.json（SkillHub 安装写入）/ _meta.json（平台市场分发写入）。
+    # 优先取前者；前者不存在时取后者。都带 skill_id 之类的归属信息就都不该被判"无来源线索"。
     installed_at = None
     meta = None
-    if meta_f.exists():
+    meta_f = None
+    # 两种落地形态：_skillhub_meta.json（SkillHub 安装写入）/ _meta.json（平台市场分发写入）。
+    # 两份并存时不能只看第一份就定档——第一份若缺市场锚点（如只有 slug/version），
+    # 而第二份带 ownerId/publishedAt，则应以"两份合并后的证据"判定，否则会误判 D 档。
+    # 故此处收集全部可用 meta，档位判定按"任一份含市场锚点即成立"（MARKET_EVIDENCE）。
+    meta_files = []
+    for _fn in META_FILENAMES:
+        _f = skill_dir / _fn
+        if not _f.exists():
+            continue
         try:
-            loaded = json.loads(meta_f.read_text())
+            loaded = json.loads(_f.read_text())
         except Exception:
             loaded = None  # 解析失败（损坏）：当无 meta，走正常 D 分支，不崩批
         if isinstance(loaded, dict):
-            meta = loaded
-            r["source"] = meta.get("source")
-            r["version"] = meta.get("version")
-            if meta.get("installedAt"):
-                try:
-                    installed_at = int(meta["installedAt"]) / 1000
-                    r["installed"] = time.strftime("%Y-%m-%d", time.localtime(installed_at))
-                except Exception:
-                    pass
+            meta_files.append((_fn, loaded))
         elif loaded is not None:
             # 成功解析但非 dict（列表/字符串）——属异常输入，交由 main() 的 try/except
             # 降级为「？ 核验异常」，既不静默吞掉、也不崩整批（F-3 / P0-4）
-            raise ValueError(f"_skillhub_meta.json 非 dict（实为 {type(loaded).__name__}），核验中止")
+            raise ValueError(f"{_fn} 非 dict（实为 {type(loaded).__name__}），核验中止")
+    if meta_files:
+        _fn, meta = meta_files[0]
+        meta_f = _fn
+        # 来源与版本：优先取带完整字段的一份
+        for _fn2, _m in meta_files:
+            if not r["source"]:
+                r["source"] = _m.get("source") or ("marketplace" if _fn2 == "_meta.json" else None)
+            if not r["version"]:
+                r["version"] = _m.get("version")
+        if r["source"] is None and any(_fn2 == "_meta.json" for _fn2, _ in meta_files):
+            r["source"] = "marketplace"
+        # 市场锚点：任一份 meta 含其一即成立（合并证据，不因第一份缺字段而漏判）
+        if not any(any(_m.get(k) for k in MARKET_EVIDENCE) for _fn2, _m in meta_files):
+            # 合并后仍无锚点 → 把第一份降级为"无市场证据"，避免 MARKET_EVIDENCE 误命中
+            meta = {k: v for k, v in meta.items() if k not in MARKET_EVIDENCE}
+        # 时间：installedAt（安装时刻）或 publishedAt（市场发布时间）
+        for _fn2, _m in meta_files:
+            ts = _m.get("installedAt") or _m.get("publishedAt")
+            if ts:
+                try:
+                    installed_at = int(ts) / 1000
+                    r["installed"] = time.strftime("%Y-%m-%d", time.localtime(installed_at))
+                except Exception:
+                    pass
+                break
 
     # 2) 自建判定（数据驱动优先，手维护名单兜底；全部为本地证据、可被伪造）
     has_ledger = (skill_dir / "UPSTREAM-MERGE.md").exists() and \
@@ -179,6 +240,11 @@ def audit_skill(skill_dir: Path) -> dict:
         own_evidence.append("meta 命名空间")
     if has_ledger and not r["source"]:
         own_evidence.append("改造台账")
+    # 2026-11-02 补：SKILL.md frontmatter 声明 agent_created: true → 本机 agent 自建。
+    # 这是比手维护名单更可靠的数据驱动信号（写技能时自带），故排在名单之前作为独立依据。
+    # 局限同其他本地证据：可被伪造，故判词仍声明"不构成授权依据"。
+    if detect_agent_created(skill_dir):
+        own_evidence.append("frontmatter agent_created")
     if own_evidence:
         r["source_evidence"] = own_evidence
         r["tier"] = "自建/改造"

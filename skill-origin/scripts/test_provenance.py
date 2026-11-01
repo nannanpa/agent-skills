@@ -34,12 +34,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import provenance as pv
 
 
-def _mk_skill(tmp: Path, name: str, meta=None, body="# test\n", ledger: str | None = None) -> Path:
+def _mk_skill(tmp: Path, name: str, meta=None, body="# test\n", ledger: str | None = None,
+             meta_fn: str | None = None, frontmatter_extra: str = "") -> Path:
+    """meta_fn 指定写入哪个 meta 文件名（默认 _skillhub_meta.json）。
+
+    显式指定 meta_fn 时只写该一个文件——避免同时写两份 meta 造成"两份并存"的
+    非典型状态，让用例精确锁定被测的那条路径。
+    """
     d = tmp / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "SKILL.md").write_text("---\ndescription: x\n---\n" + body, encoding="utf-8")
+    fm = "description: x\n" + frontmatter_extra
+    (d / "SKILL.md").write_text(f"---\n{fm}---\n" + body, encoding="utf-8")
     if meta is not None:
-        (d / "_skillhub_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+        fn = meta_fn or "_skillhub_meta.json"
+        (d / fn).write_text(json.dumps(meta), encoding="utf-8")
     if ledger is not None:
         (d / "UPSTREAM-MERGE.md").write_text(ledger, encoding="utf-8")
     return d
@@ -234,6 +242,78 @@ def test_main_batch_degrades_both_rows():
     assert rc is None, f"main() 不应触发 SystemExit，实得 {rc}"
     assert "badmeta" in printed and "？ 核验异常" in printed, f"坏 meta 行未出现：{printed}"
     assert "good" in printed, f"好 meta 行未出现：{printed}"
+
+
+# ---- 2026-11-02 溯源盲区修复（T19–T24）----
+# 背景：smart-charts 与 rule-miner 被误判「D 无背书」。两个根因各自独立，
+#   ① provenance.py 只认 _skillhub_meta.json，不认平台市场分发的 _meta.json
+#   ② 自建信号（agent_created / 白名单）未覆盖无 meta 的 agent 自建技能
+
+def test_meta_json_form_is_marketplace_backing():
+    """T19：_meta.json 形态（ownerId/publishedAt）→ A 官方背书，不再误判 D。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "smart-charts",
+                      meta_fn="_meta.json",
+                      meta={"ownerId": "421765", "publishedAt": 1789224266057,
+                            "slug": "smart-charts", "version": "8.4.0"})
+        r = pv.audit_skill(d)
+        assert r["tier"] == "A 官方背书", f"应判 A 官方背书，实得 {r['tier']}"
+        assert r["source"] == "marketplace", f"来源应记为 marketplace，实得 {r['source']}"
+        assert r["version"] == "8.4.0", f"版本应取自 meta，实得 {r['version']}"
+
+
+def test_meta_json_form_reverse_not_granted_backing():
+    """T20（反查）：_meta.json 存在但无任何市场锚点字段 → 不得得 A 官方背书。
+
+    正则写宽一点就会让空壳 _meta.json 白拿背书——这条锁住"必须有 ownerId/publishedAt 之一"。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "hollow-meta",
+                      meta_fn="_meta.json",
+                      meta={"slug": "hollow-meta", "version": "1.0.0"})
+        r = pv.audit_skill(d)
+        assert r["tier"] != "A 官方背书", f"空壳 meta 不得得 A 官方背书，实得 {r['tier']}"
+
+
+def test_agent_created_frontmatter_is_self_built():
+    """T21：frontmatter 声明 agent_created: true → 自建/改造（数据驱动，不靠名单）。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "some-new-agent-skill",
+                      frontmatter_extra="agent_created: true\n")
+        r = pv.audit_skill(d)
+        assert r["tier"] == "自建/改造", f"应判自建/改造，实得 {r['tier']}"
+        assert "frontmatter agent_created" in r.get("source_evidence", []), \
+            f"依据应含 frontmatter agent_created，实得 {r.get('source_evidence')}"
+
+
+def test_agent_created_outside_frontmatter_ignored():
+    """T22（反查）：正文里出现 agent_created: true 不算 → 不得升格自建。
+
+    只认 frontmatter 首个 --- 区块内；正文提及不得升格（防止正文一句话就能伪造自建身份）。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "body-mention-only",
+                      body="# 说明\nagent_created: true\n")
+        r = pv.audit_skill(d)
+        assert r["tier"] != "自建/改造", f"正文提及不得升格自建，实得 {r['tier']}"
+
+
+def test_rule_miner_not_fall_to_d_tier():
+    """T23：rule-miner（无 meta、靠名单+frontmatter）→ 自建/改造，不得落 D 档。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "rule-miner",
+                      frontmatter_extra="agent_created: true\nversion: 2.2.3\n")
+        r = pv.audit_skill(d)
+        assert r["tier"] == "自建/改造", f"应判自建/改造，实得 {r['tier']}"
+
+
+def test_agent_created_false_not_self_built():
+    """T24（反查）：agent_created: false → 不得升格自建。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _mk_skill(Path(tmp), "not-agent-made",
+                      frontmatter_extra="agent_created: false\n")
+        r = pv.audit_skill(d)
+        assert r["tier"] != "自建/改造", f"agent_created: false 不得升格，实得 {r['tier']}"
 
 
 def main():
