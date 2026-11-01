@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-rule-miner 巡检脚本 v2.2：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
+rule-miner 盘点脚本 v2.2.1：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
 设计原则（来自实战）：不做语义解析，只统计字节、行数与文件名；计行需逐行读取，
 故 I/O 与文件总字节同阶（但不进模型上下文）。
 
@@ -16,8 +16,8 @@ P0 整改（2026-11-01 DSH 外审回函）：
   - P0-3 冲突分级改窗口判定（否定词须贴近命中词）
   - P0-4 os.walk onerror 逐目录告警；kb_check 增 KB_ERR（grep 不可用/超时/报错）
 
-P2 发布前检查整改（2026-11-01，待发布跳 2.2.0）：
-  - ⑤ 新增 --version（argparse action=version，打印 v2.2.0）
+P2 发布前检查整改（2026-11-01，2.2.0 首发；2.2.1 仅改名/补四步描述，内容不变）：
+  - ⑤ 新增 --version（argparse action=version，打印 v2.2.1）
   - ⑥ NOISE_HINTS 子串误杀改为目录边界匹配（novel_approaches.md 等正规文件不再被误跳）
   - ⑦ --out 报告补 header（文本头两行 + JSON meta：tool/version/root/generated_at）
 
@@ -175,13 +175,13 @@ def main() -> None:
         description="rule-miner 廉价枚举指定根目录下的 .md 知识资产候选",
     )
     ap.add_argument("--root", metavar="DIR", default=DEFAULT_ROOT,
-                    help="扫描根目录（默认 ~/WorkBuddy）；局部巡检用 --root <任务目录>")
+                    help="扫描根目录（默认 ~/WorkBuddy）；局部盘点用 --root <任务目录>")
     ap.add_argument("--kb", metavar="DIR", help="交叉核验的知识库目录（如 ~/WorkBuddy/记忆分册）")
     ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     ap.add_argument("--out", metavar="FILE",
                     help="将报告写入文件（不指定 --json 时为文本；指定则为 JSON）")
     ap.add_argument("--version", action="version",
-                    version="rule-miner 巡检脚本 v2.2.0")
+                    version="rule-miner 盘点脚本 v2.2.1")
     args = ap.parse_args()
 
     # ① 工程级参数校验：中文友好报错 + 非零退出码
@@ -274,7 +274,7 @@ def main() -> None:
         out = {
             "meta": {
                 "tool": "rule-miner scan.py",
-                "version": "2.2.0",
+                "version": "2.2.1",
                 "root": root,
                 "generated_at": datetime.now().isoformat(timespec='seconds'),
             },
@@ -291,8 +291,8 @@ def main() -> None:
         }
         text = json.dumps(out, ensure_ascii=False, indent=2)
     else:
-        lines_out = [f"# rule-miner 巡检报告",
-                     f"# 版本 v2.2.0 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
+        lines_out = [f"# rule-miner 盘点报告",
+                     f"# 版本 v2.2.1 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
                      "",
                      "=== 全盘 .md 分布（不含已排除的噪声目录）===",
                      f"  [汇总] 全盘 .md 总数 {all_count}（EXCLUDE_DIRS 如 novels/chapters/docs/references/dist 等已在遍历阶段剪枝，不计入；该数通常小于 find 全盘 .md 数，属正常）"]
