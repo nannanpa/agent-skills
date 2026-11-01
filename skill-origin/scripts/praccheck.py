@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""技能实用度预检 — 安装前甄别技能“好不好使、值不值得装”，与溯源(provenance)互补。
+"""技能实用度核查 — 对已安装技能做“好不好使、值不值得留”，与溯源(provenance)互补。
 
 用法:
-    python3 prequal.py <技能目录名>                         # 预检单个
-    python3 prequal.py all                                  # 批量预检 ~/.workbuddy/skills/
-    python3 prequal.py all --dir ~/my-skills                 # 自定义目录（进度走 stderr）
-    python3 prequal.py <技能目录名> --need "我想自动签到领积分"   # 附需求做匹配度评估
+    python3 praccheck.py <技能目录名>                         # 核查单个
+    python3 praccheck.py all                                  # 批量核查 ~/.workbuddy/skills/
+    python3 praccheck.py all --dir ~/my-skills                 # 自定义目录（进度走 stderr）
+    python3 praccheck.py <技能目录名> --need "我想自动签到领积分"   # 附需求做匹配度评估
 
 分工：provenance.py 管“正不正宗”（需联网查 GitHub）；本脚本管“实不实用”
 （纯本地、零网络、零依赖）。安全疑虑仍转交官方 skills-sec-audit。
 
-判定维度（详见 SKILL.md「实用度预检」章节）：
+判定维度（详见 SKILL.md「实用度核查」章节）：
     ① 结构齐备   ② 三件套(异常处理/FAQ/多场景示例)  ③ 描述诚实度
     ④ 运行风险(第三方依赖/硬编码路径/凭证需求)       ⑤ 需求匹配度(--need)
-    ⑥ 实跑验证(骨架→长大中)：py_compile 编译 + __main__ 入口 --help 启动探测 + 样例脚本实际执行并核对输出非空（纯本地、零网络）
+    ⑥ 实跑验证(骨架→长大中)：内置 compile() 内存编译（零写盘）+ __main__ 入口 --help 启动探测 + 样例脚本实际执行并核对输出非空（纯本地、零网络）
 """
 import re
 import sys
 import subprocess
-import py_compile
 from pathlib import Path
 
 SKILLS_DIR = Path.home() / ".workbuddy" / "skills"
@@ -154,9 +153,9 @@ def check_env_need(text_all: str):
 def runtime_smoke(skill_dir: Path, scripts):
     """实跑冒烟(骨架)：编译 + 启动探测，验证技能脚本至少「能加载、能启动」。
 
-    这是把 prequal 从「静态词法 lint」推向「真能跑」的起步骨架；不做深度语义 / 输出
+    这是把 praccheck 从「静态词法 lint」推向「真能跑」的起步骨架；不做深度语义 / 输出
     正确性验证（那是行星级质量审计该做的，留待后续长大）。纯本地、零网络；仅对 .py 做
-    py_compile +（含 __main__ 守卫时）`--help` 启动探测，超时 8s。局限：不验证实际功能、
+    内置 compile() 内存编译（零写盘）+（含 __main__ 守卫时）`--help` 启动探测，超时 8s。局限：不验证实际功能、
     不核实输出正确，仅证明「脚本不崩、能起」。
     """
     findings = []
@@ -166,12 +165,11 @@ def runtime_smoke(skill_dir: Path, scripts):
             continue
         # 1) 编译检查：能否解析/加载（抓 SyntaxError/IndentationError）
         try:
-            py_compile.compile(str(s), doraise=True)
+            compile(s.read_text(errors="ignore"), str(s), "exec")
             compiles += 1
-        except py_compile.PyCompileError as e:
+        except SyntaxError as e:
             compile_errs += 1
-            last = str(e).strip().splitlines()[-1][:60] if str(e).strip() else "未知编译错误"
-            findings.append(("warn", "脚本 %s 编译失败（语法错误）：%s" % (s.name, last)))
+            findings.append(("warn", "脚本 %s 编译失败（语法错误）：%s" % (s.name, e.msg)))
             continue
         # 2) 启动探测：仅对含 __main__ 守卫的入口脚本尝试 --help（限量前 3 个，防卡批）
         if "__main__" not in read_text(s):
@@ -217,7 +215,7 @@ def example_run(skill_dir: Path, scripts):
 
     runtime_smoke 只证明「能加载、能启动」(--help 不报错)；本层进一步实际运行样例脚本
     (命名约定 demo/example/example_demo/run_example/sample/smoke)，验证其默认调用能产生
-    非空输出、退出码为 0、无 Traceback。这是把 prequal 从「矮行星」推向「质量审计行星」
+    非空输出、退出码为 0、无 Traceback。这是把 praccheck 从「矮行星」推向「质量审计行星」
     的关键一层：不仅不崩，还要真能产出。纯本地、零网络、超时 8s；不跑主入口无参调用
     (避免副作用)，只跑显式样例脚本。
     """
@@ -275,7 +273,7 @@ def need_fit(need: str, text_all: str):
     return (v, "需求关键词命中率 %.0f%%（启发式，仅供参考，最终以人工判断为准）" % (cov * 100))
 
 
-def prequal(skill_dir: Path, need: str = ""):
+def praccheck(skill_dir: Path, need: str = ""):
     r = {"name": skill_dir.name}
     skill_md = skill_dir / "SKILL.md"
     text_all = read_text(skill_md)
@@ -347,13 +345,13 @@ def prequal(skill_dir: Path, need: str = ""):
 
     hard = over[0] == "warn" or any(s == "warn" for s, _ in run)
     if score >= 85 and not hard:
-        r["tier"] = "优（可放心装）"
+        r["tier"] = "优（可放心用）"
     elif score >= 65:
         r["tier"] = "良（可用，注意点见下）"
     elif score >= 40:
-        r["tier"] = "慎用（先验证再装）"
+        r["tier"] = "慎用（先验证再用于关键场景）"
     else:
-        r["tier"] = "不建议（高风险/玩具）"
+        r["tier"] = "不建议用（高风险/玩具）"
     r["score"] = score
 
     if need:
@@ -370,7 +368,7 @@ def main():
         try:
             base = Path(args[i + 1]).expanduser()
         except IndexError:
-            print("❌ --dir 需要一个目录路径，例如：prequal.py all --dir ~/my-skills")
+            print("❌ --dir 需要一个目录路径，例如：praccheck.py all --dir ~/my-skills")
             sys.exit(1)
         args = args[:i] + args[i + 2:]
     if "--need" in args:
@@ -389,14 +387,14 @@ def main():
     if arg != "all" and not (targets[0] / "SKILL.md").exists():
         print("⚠ %s 目录下无 SKILL.md，可能不是有效技能目录" % targets[0].name)
 
-    print("# 🧪 技能实用度预检报告（%d 个）\n" % len(targets))
+    print("# 🧪 技能实用度核查报告（%d 个）\n" % len(targets))
     print("| 技能 | 结构 | 三件套 | 描述诚实 | 运行风险 | 实跑验证 | 实用档位 | 建议 |")
     print("|---|---|---|---|---|---|---|---|")
     n = len(targets)
     results = []
     for i, d in enumerate(targets, 1):
-        print("[%d/%d] 预检中: %s …" % (i, n, d.name), file=sys.stderr, flush=True)
-        r = prequal(d, need)
+        print("[%d/%d] 核查中: %s …" % (i, n, d.name), file=sys.stderr, flush=True)
+        r = praccheck(d, need)
         results.append(r)
         verdict = "结构完整、三件套齐备" if r["score"] >= 85 else "详见下方发现"
         print("| %s | %s | %s | %s | %s | %s | **%s** | %s |" % (

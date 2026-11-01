@@ -10,7 +10,7 @@
 
 两维独立、互不影响：
   - 正宗度 provenance.audit_skill（联网查 GitHub；离线/失败自动降级跳过）
-  - 实用度 prequal.prequal（纯本地零网络，始终可跑）
+  - 实用度 praccheck.praccheck（纯本地零网络，始终可跑）
 安全仍转交官方 skills-sec-audit。
 """
 import sys
@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import provenance as pv  # noqa: E402
-import prequal as pq      # noqa: E402
+import praccheck as pq      # noqa: E402
 
 SKILLS_DIR = Path.home() / ".workbuddy" / "skills"
 _NET_CACHE = None
@@ -47,11 +47,11 @@ def audit_origin(d, need="", allow_network=True):
     res = {"name": d.name}
     # 实用度（纯本地，始终可跑）
     try:
-        res["pq"] = pq.prequal(d, need)
+        res["pq"] = pq.praccheck(d, need)
     except Exception as e:  # 兜底：单技能异常不应中断整批
-        res["pq"] = {"name": d.name, "tier": "不建议（高风险/玩具）",
+        res["pq"] = {"name": d.name, "tier": "不建议用（高风险/玩具）",
                      "score": 0, "three": "?", "over": "?", "run": "?",
-                     "findings": [("warn", "实用度预检异常：%s" % e)]}
+                     "findings": [("warn", "实用度核查异常：%s" % e)]}
     # 正宗度（联网；不可用时降级跳过）
     if allow_network and network_available():
         try:
@@ -72,11 +72,11 @@ def verdict_of(r):
     score = pq_res.get("score", 0)
     pv_tier = pv_res.get("tier", "")
     if score < 40:
-        advice = "❌ 不建议装（实用度过低）"
+        advice = "❌ 不建议用（实用度过低）"
     elif score < 65 or "D" in pv_tier or "？" in pv_tier or "跳过" in pv_tier:
-        advice = "⚠ 先验证再装"
+        advice = "⚠ 先验证再用于关键场景"
     else:
-        advice = "✅ 可装"
+        advice = "✅ 可放心用"
     notes = []
     for sev, msg in pq_res.get("findings", [])[:2]:
         notes.append(msg[:42])
@@ -112,7 +112,14 @@ def main():
         allow_network = False
         args = [a for a in args if a != "--no-network"]
     arg = args[0] if args else "all"
-    targets = pq.iter_targets(base, arg)
+    if not base.exists() or not base.is_dir():  # P1-6 边缘兜底：目录不存在/非目录不抛堆栈
+        print("❌ 扫描目录不存在或不是目录：%s" % base)
+        return
+    try:
+        targets = pq.iter_targets(base, arg)
+    except OSError as e:
+        print("❌ 无法读取扫描目录 %s：%s" % (base, e))
+        return
     if not targets:
         print("未找到技能: %s（扫描目录：%s）" % (arg, base))
         return
@@ -155,7 +162,7 @@ def main():
         print("- **综合建议**：%s" % advice)
         print()
 
-    print("> 分工：本报告「正宗度」由 provenance 提供（联网查 GitHub），「实用度」由 prequal "
+    print("> 分工：本报告「正宗度」由 provenance 提供（联网查 GitHub），「实用度」由 praccheck "
           "提供（纯本地）；「安不安全」请对可疑项跑官方 skills-sec-audit。")
 
 

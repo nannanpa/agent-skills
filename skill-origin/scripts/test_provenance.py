@@ -9,7 +9,7 @@
   T5 他人命名空间 meta 不应被认作 自建/改造
   ---- 以下为 DSH 外审 P0 修复闭环（T6–T13）----
   T6 仅 slug（无 namespace）不得命中白名单 → 非自建/改造
-  T7 仅 source=marketplace（无 skillId）不得得 A 官方市场
+  T7 仅 source=marketplace（无 skillId）不得得 A 官方背书
   T8 同名 slug + 他人 namespace 不得误判自建/改造
   T9 空 UPSTREAM-MERGE.md 不得算自建/改造
   T10 非 dict meta（列表）不抛异常、降级而非崩批
@@ -17,10 +17,10 @@
   T12 死来源链接 + 可用提及 不得落 D（落 ？ 来源声明未解析）
   T13 目录名含仓库短名子串的提及不得升格为来源（source_repos 为空）
   ---- 以下为第 2 轮终审 C1–C3 新增锁（T14–T18）----
-  T14 hash 式 marketplace（含真实 腾讯文档/_skillhub_meta.json）→ A 官方市场
+  T14 hash 式 marketplace（含真实 腾讯文档/_skillhub_meta.json）→ A 官方背书
   T15 目录名 claude-code + 正文仅提及 anthropics/claude-code（无 SOURCE_HINT）→ ？ 来源未声明（不得 A+）
   T16 判词含"可被伪造"且 provenance.py 全文无"原创度100%"
-  T17 marketplace + skillId 但属预置模板(preinstalledTemplate) → 不得 A 官方市场
+  T17 marketplace + skillId 但属预置模板(preinstalledTemplate) → 不得 A 官方背书
   T18 main() 批量：坏 meta + 好 meta → 两行都出、退出码 0
 """
 from __future__ import annotations  # P0-5：让 dict | None 在 3.9 只当字符串注解
@@ -93,10 +93,10 @@ def test_slug_only_not_trusted():
 
 
 def test_marketplace_claim_not_endorsed():
-    # T7: 仅 {"source":"marketplace"}（无 skillId）→ 不得得 A 官方市场
+    # T7: 仅 {"source":"marketplace"}（无 skillId）→ 不得得 A 官方背书
     with tempfile.TemporaryDirectory() as tmp:
         r = pv.audit_skill(_mk_skill(Path(tmp), "free-notes", {"source": "marketplace"}))
-        assert r["tier"] != "A 官方市场", f"缺 skillId 不得 A 官方市场，实得 {r['tier']}"
+        assert r["tier"] != "A 官方背书", f"缺 skillId 不得 A 官方背书，实得 {r['tier']}"
 
 
 def test_same_slug_other_author():
@@ -162,18 +162,18 @@ def test_suffix_substring_no_source():
 
 def test_hash_only_marketplace_gets_marketplace():
     # T14: marketplace 门槛改为 skillId or installedContentHash 二选一（C1）。
-    # 合成：无 skillId、仅有 installedContentHash → 必须 A 官方市场。
+    # 合成：无 skillId、仅有 installedContentHash → 必须 A 官方背书。
     with tempfile.TemporaryDirectory() as tmp:
         r = pv.audit_skill(_mk_skill(Path(tmp), "free-notes",
                                      {"source": "marketplace", "installedContentHash": "sha256:abc"}))
-        assert r["tier"] == "A 官方市场", f"hash 式 marketplace 应判 A，实得 {r['tier']}"
+        assert r["tier"] == "A 官方背书", f"hash 式 marketplace 应判 A，实得 {r['tier']}"
     # 真实：用本机 腾讯文档/_skillhub_meta.json（source=marketplace、有 installedContentHash、无 skillId）→ A。
     real = Path.home() / ".workbuddy" / "skills" / "腾讯文档" / "_skillhub_meta.json"
     if real.exists():
         meta = json.loads(real.read_text())
         with tempfile.TemporaryDirectory() as tmp:
             r2 = pv.audit_skill(_mk_skill(Path(tmp), "腾讯文档", meta=meta, body="# 腾讯文档\n"))
-            assert r2["tier"] == "A 官方市场", f"真实腾讯文档 meta 应判 A，实得 {r2['tier']}"
+            assert r2["tier"] == "A 官方背书", f"真实腾讯文档 meta 应判 A，实得 {r2['tier']}"
 
 
 def test_name_substring_does_not_grant_source():
@@ -198,12 +198,12 @@ def test_verdict_honest_no_100pct_claim():
 
 
 def test_marketplace_template_not_endorsed():
-    # T17: marketplace + skillId 但属预置模板(preinstalledTemplate) → 不得 A 官方市场（C1 排除项）。
+    # T17: marketplace + skillId 但属预置模板(preinstalledTemplate) → 不得 A 官方背书（C1 排除项）。
     with tempfile.TemporaryDirectory() as tmp:
         r = pv.audit_skill(_mk_skill(Path(tmp), "free-notes",
                                      {"source": "marketplace", "skillId": "skill_123",
                                       "preinstalledTemplate": True}))
-        assert r["tier"] != "A 官方市场", f"预置模板不得 A 官方市场，实得 {r['tier']}"
+        assert r["tier"] != "A 官方背书", f"预置模板不得 A 官方背书，实得 {r['tier']}"
 
 
 def test_main_batch_degrades_both_rows():
@@ -217,7 +217,7 @@ def test_main_batch_degrades_both_rows():
         bad.mkdir()
         (bad / "SKILL.md").write_text("---\ndescription: x\n---\n# t\n", encoding="utf-8")
         (bad / "_skillhub_meta.json").write_text(json.dumps(["x"]), encoding="utf-8")
-        # 好 meta：marketplace + hash → A 官方市场，证明整批未因坏 meta 停摆
+        # 好 meta：marketplace + hash → A 官方背书，证明整批未因坏 meta 停摆
         good = _mk_skill(tmp, "good", {"source": "marketplace", "installedContentHash": "sha256:good"})
         old_argv, old_dir, old_fetch = sys.argv, pv.SKILLS_DIR, pv.fetch_repo
         pv.SKILLS_DIR = tmp

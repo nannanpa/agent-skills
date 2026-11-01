@@ -22,7 +22,7 @@ SKILLS_DIR = Path.home() / ".workbuddy" / "skills"
 API = "https://api.github.com/repos/{}"
 TOP_STAR = 1000      # >= 此星数视为行业顶流
 LOW_STAR = 100       # < 此星数视为低星
-USER_AGENT = "skill-origin/1.0"
+USER_AGENT = "skill-origin/1.2.1"
 
 # 厂商官方 org 白名单（A+ 档）：上游仓库属这些 org → 比单纯星数更硬的背书。
 # 来源：trustskills 的可信分发根 + 各厂商自营技能仓库（2026-10 核定，新增手动维护）。
@@ -103,6 +103,9 @@ def fetch_repo(full_name: str):
     匿名公开接口即可调用（限额 60 次/时，日常核验足够）。
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"}
+    tok = os.environ.get("GITHUB_TOKEN")  # P0-3 方案A：可选 token 提额，未设则维持匿名
+    if tok:
+        headers["Authorization"] = "Bearer " + tok
     req = urllib.request.Request(API.format(full_name), headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -226,7 +229,7 @@ def audit_skill(skill_dir: Path) -> dict:
         v = r["version"] or "未知版本"
         if r["source"] == "marketplace" and meta and not meta.get("preinstalledTemplate") \
                 and any(meta.get(k) for k in MARKET_EVIDENCE):
-            r["tier"] = "A 官方市场"
+            r["tier"] = "A 官方背书"
             r["verdict"] = f"CodeBuddy 官方市场分发(v{v})，市场分发记录（本地声明，未与平台核对、可被伪造）"
         elif r["source"] == "marketplace":
             r["tier"] = "D 无背书"
@@ -269,7 +272,7 @@ def audit_skill(skill_dir: Path) -> dict:
         r["verdict"] = f"上游 {stars}★ 非fork，已是最权威版本" + mention_note
     elif r["source"] == "marketplace" and not is_mention_only and meta and not meta.get("preinstalledTemplate") \
             and any(meta.get(k) for k in MARKET_EVIDENCE):
-        r["tier"] = "A 官方市场"
+        r["tier"] = "A 官方背书"
         r["verdict"] = f"CodeBuddy 官方市场分发(v{r['version'] or '未知版本'})，市场分发记录（本地声明，未与平台核对、可被伪造），上游 {stars}★"
     elif stars >= LOW_STAR:
         r["tier"] = "B- 中坚来源"
@@ -299,9 +302,16 @@ def main():
             sys.exit(1)
         args = args[:i] + args[i + 2:]
     arg = args[0] if args else "all"
-    targets = ([base / arg] if arg != "all"
-               else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()
-                           and not p.name.startswith(".") and ".bak" not in p.name))
+    if not base.exists() or not base.is_dir():  # P1-6 边缘兜底：目录不存在/非目录不抛堆栈
+        print(f"❌ 扫描目录不存在或不是目录：{base}")
+        return
+    try:
+        targets = ([base / arg] if arg != "all"
+                   else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()
+                               and not p.name.startswith(".") and ".bak" not in p.name))
+    except OSError as e:
+        print(f"❌ 无法读取扫描目录 {base}：{e}")
+        return
     if not targets:
         print(f"未找到技能: {arg}（扫描目录：{base}）")
         return
