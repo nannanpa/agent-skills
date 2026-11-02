@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-rule-miner 盘点脚本 v2.2.3：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
+rule-miner 盘点脚本 v2.2.4：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
 设计原则（来自实战）：不做语义解析，只统计字节、行数与文件名；计行需逐行读取，
 故 I/O 与文件总字节同阶（但不进模型上下文）。
 
 v2.1 整改（2026-10-31 发布前置对照，对应规则 A/B/C）：
   - ① 工程级异常处理：argparse 参数校验 + 中文友好报错 + 非零退出码
   - ③ --out FILE：将候选报告写入文件（扫描产物 sink）
-  - ④ 冲突检测升级：KB_HIT 抽取知识库命中原文片段 + 初步矛盾分级(高/中/低)
+  - ④ 冲突检测升级：KB_HIT 抽取知识库命中原文片段 + 初步矛盾分级(高/中)
 
 P0 整改（2026-11-01 DSH 外审回函）：
   - P0-1 分布两段化：全盘 .md 分布（含噪声区）+ 候选分布；根目录归 (根目录)
@@ -17,7 +17,7 @@ P0 整改（2026-11-01 DSH 外审回函）：
   - P0-4 os.walk onerror 逐目录告警；kb_check 增 KB_ERR（grep 不可用/超时/报错）
 
 P2 发布前检查整改（2026-11-01，2.2.0 首发；2.2.1 仅改名/补四步描述，内容不变）：
-  - ⑤ 新增 --version（argparse action=version，打印 v2.2.3）
+  - ⑤ 新增 --version（argparse action=version，打印 v2.2.4）
   - ⑥ NOISE_HINTS 子串误杀改为目录边界匹配（novel_approaches.md 等正规文件不再被误跳）
   - ⑦ --out 报告补 header（文本头两行 + JSON meta：tool/version/root/generated_at）
 
@@ -199,7 +199,7 @@ def main() -> None:
     ap.add_argument("--out", metavar="FILE",
                     help="将报告写入文件（不指定 --json 时为文本；指定则为 JSON）")
     ap.add_argument("--version", action="version",
-                    version="rule-miner 盘点脚本 v2.2.3")
+                    version="rule-miner 盘点脚本 v2.2.4")
     args = ap.parse_args()
 
     # ① 工程级参数校验：中文友好报错 + 非零退出码
@@ -307,7 +307,7 @@ def main() -> None:
         out = {
             "meta": {
                 "tool": "rule-miner scan.py",
-                "version": "2.2.3",
+                "version": "2.2.4",
                 "root": root,
                 "generated_at": datetime.now().isoformat(timespec='seconds'),
             },
@@ -325,7 +325,7 @@ def main() -> None:
         text = json.dumps(out, ensure_ascii=False, indent=2)
     else:
         lines_out = [f"# rule-miner 盘点报告",
-                     f"# 版本 v2.2.3 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
+                     f"# 版本 v2.2.4 | 扫描根 {root} | 生成时间 {datetime.now().isoformat(timespec='seconds')}",
                      "",
                      "=== 全盘 .md 分布（不含已排除的噪声目录）===",
                      f"  [汇总] 全盘 .md 总数 {all_count}（EXCLUDE_DIRS 如 novels/chapters/docs/references/dist 等已在遍历阶段剪枝，不计入；该数通常小于 find 全盘 .md 数，属正常）"]
