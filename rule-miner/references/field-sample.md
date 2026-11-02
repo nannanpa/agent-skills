@@ -118,3 +118,56 @@ v2 在原有"廉价枚举→核验→提取→并入"上，补了四项智能。
 | 范围 | 全盘 4211 个 .md | 单任务工作区（秒级） |
 | 频率 | 低（月级） | 高（每任务） |
 | 输出 | 根目录盘点报告 + INDEX 指针 | 几条并入 + 工作区日志 append |
+
+## 九、可直接跑的命令示例（v2.2.5 新增）
+
+> 回应 2.2.4 评测"补充可执行示例"。以下命令均可直接复制运行（路径换成你自己的环境）。
+
+### 例 1：局部扫描 + JSON 落盘（最常用）
+```bash
+python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py \
+  --root ~/WorkBuddy/2026-10-31-08-50-44 \
+  --json --out /tmp/rm-cand.json
+```
+期望产物 `/tmp/rm-cand.json`，结构要点：
+```json
+{
+  "tool": "rule-miner scan.py",
+  "version": "2.2.5",
+  "root": "/Users/mabin/WorkBuddy/2026-10-31-08-50-44",
+  "all_distribution_desc": "全盘 .md 分布（不含已排除的噪声目录）",
+  "distribution_note": "all_distribution 不含已排除的噪声目录（novels/chapters/references/dist/docs/archive 等）；candidate_distribution 仅含命中资产类关键词的 .md",
+  "md_total": 20,
+  "candidates_total": 20,
+  "all_distribution": {"(根目录)": 16, ".workbuddy": 4},
+  "candidates": [
+    {"path": ".workbuddy/memory/2026-11-02.md", "bytes": 32915, "lines": 142,
+     "asset_type": "硬约束", "provenance": "content", "kb": "—",
+     "snippet": "", "source": "", "grade": ""}
+  ]
+}
+```
+字段说明：`all_distribution` 为全盘 .md 按顶层目录计数；`candidates` 仅含命中资产类关键词者，按体积大→小排序；`provenance=content` 表示由首段内容指纹命中，`name` 表示由文件名命中。
+
+### 例 2：先用自检验证脚本本身没坏
+```bash
+python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py --selftest
+```
+期望输出：10 条 `✅ PASS`，末行 `自检结果：全部通过 ✅`，退出码 0。
+
+### 例 3：大目录怕卡死——加超时 + 断点续扫
+```bash
+# 第一次（若中途 Ctrl-C，进度已写入 progress.json）
+python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py \
+  --root ~/WorkBuddy --timeout 30 --progress /tmp/rm-progress.json
+# 续扫（跳过已处理文件，继续未完成部分）
+python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py \
+  --root ~/WorkBuddy --resume /tmp/rm-progress.json --progress /tmp/rm-progress.json
+```
+
+### 例 4：脚本级 sink（直接把报告交给下游 agent）
+```bash
+python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py \
+  --root ~/WorkBuddy/2026-10-31-08-50-44 --sink /tmp/rm-sink.txt
+```
+`/tmp/rm-sink.txt` 内容与默认 stdout 报告一致，可直接被下游流程消费。
