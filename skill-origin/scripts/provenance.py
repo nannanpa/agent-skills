@@ -18,29 +18,28 @@ import urllib.error
 from datetime import date, datetime
 from pathlib import Path
 
-SKILLS_DIR = Path.home() / ".workbuddy" / "skills"
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import common  # noqa: E402  v1.2.2：统一错误码 / 跨平台目录发现 / 可配置规则
+
 API = "https://api.github.com/repos/{}"
-TOP_STAR = 1000      # >= 此星数视为行业顶流
-LOW_STAR = 100       # < 此星数视为低星
-USER_AGENT = "skill-origin/1.2.1"
+USER_AGENT = "skill-origin/1.2.2"
 
+# v1.2.2：默认扫描根改为跨平台自动发现（不再硬绑 ~/.workbuddy/skills 一个落点）。
+# 探测顺序见 common._candidate_dirs；可用环境变量 SKILL_ORIGIN_SKILLS_DIR / SKILLS_DIR 固定。
+SKILLS_DIR, _ROOT_ORIGIN = common.discover_skills_dir()
+
+# 判定规则：v1.2.2 起可外部配置（config/rules.json / --rules / SKILL_ORIGIN_RULES），
+# 默认值与 v1.2.1 内置常量完全一致——零配置行为不变，但不再需要改代码来维护名单。
+_RULES, _RULES_NOTE = common.load_rules()
+TOP_STAR = _RULES["top_star"]      # >= 此星数视为行业顶流
+LOW_STAR = _RULES["low_star"]        # < 此星数视为低星
 # 厂商官方 org 白名单（A+ 档）：上游仓库属这些 org → 比单纯星数更硬的背书。
-# 来源：trustskills 的可信分发根 + 各厂商自营技能仓库（2026-10 核定，新增手动维护）。
-OFFICIAL_ORGS = {
-    "anthropics", "openai", "google-labs-code", "google-gemini",
-    "googleworkspace", "microsoft", "github", "vercel-labs",
-}
-
-# 人工核验过的自建/改造技能名单（2026-10-12 首轮全量核验固化；新自建技能手动加进来）
-# 注意：本机命名空间为 indiv-mabin 的技能已由 OWN_NAMESPACE 数据驱动识别，本名单是"无 meta 的本地自建技能"兜底。
-SELF_BUILT = {
-    "zhiduku", "hongloumeng", "pdf-to-md", "read-oversized-image",
-    "msd-home-manual", "relation-scope", "docx-template-fill",
-    "docx-track-changes-wps", "skill-origin", "maoxuan", "skill-miner",
-    # 2026-11-02 补：rule-miner 由 agent 自建（SKILL.md 载 agent_created: true），
-    # 原漏登记导致被判 D 档无背书——自建技能被误判成"来历不明"是溯源工具的反向失真。
-    "rule-miner",
-}
+OFFICIAL_ORGS = set(_RULES["official_orgs"])
+# 人工核验过的自建/改造技能名单（兜底用；本机命名空间的技能已由 OWN_NAMESPACE 数据驱动识别）。
+SELF_BUILT = set(_RULES["self_built"])
+# 用户本人在 SkillHub 的发布命名空间（self-built 的数据驱动信号，无需手维护名单）
+OWN_NAMESPACE = _RULES["own_namespace"]
 
 # 市场件元数据的两种落地形态（2026-11-02 实证补）：
 #   ① _skillhub_meta.json —— SkillHub 安装时写入，含 slug/namespace/skillId/installedAt
@@ -50,7 +49,7 @@ SELF_BUILT = {
 META_FILENAMES = ("_skillhub_meta.json", "_meta.json")
 
 # 用户本人在 SkillHub 的发布命名空间（self-built 的数据驱动信号，无需手维护名单）
-OWN_NAMESPACE = "indiv-mabin"
+# → 已随判定规则一并外置到 common.load_rules()，见文件头部。
 
 # 市场分发记录（marketplace）的锚点：满足其一即视作有市场分发背书。
 # ① skillId / installedContentHash —— SkillHub 安装形态（_skillhub_meta.json）
@@ -108,10 +107,39 @@ def collect_repos(skill_dir: Path, skill_name: str):
     return dedup(source_repos), dedup(mention_repos)
 
 
-def fetch_repo(full_name: str):
-    """GitHub API 查询仓库；返回 dict / None（不存在）/ "RATE_LIMITED"（限流）。
+RATE_LIMIT_MARKERS = (
+    "rate limit", "secondary rate", "abuse detection", "too many requests",
+    "temporarily blocked", "please wait a few minutes",
+)
 
-    限流必须与"仓库不存在"区分：限流时无法判定≠无背书，误判 D 档是冤案。
+
+def _rate_limit_reason(code, body, headers):
+    """判定 403/429 是否为限流，并给出具体形态（供报告说明是哪种限流）。
+
+    v1.2.2 修复：旧实现只认「body 含 rate limit」或「X-RateLimit-Remaining=0」，
+    漏掉了 429 空 body、GitHub 二次限流（secondary rate limit）、
+    abuse detection、以及带 Retry-After 的 403——这些会被当成「仓库不存在」
+    进而误判 D 档，制造冤案。现按保守原则：403/429 一律判为受限。
+    """
+    low = (body or "").lower()
+    hdrs = headers or {}
+    if "secondary rate" in low or "abuse detection" in low:
+        return "二次限流"
+    if "rate limit" in low:
+        return "主限流"
+    if hdrs.get("Retry-After"):
+        return "限流（带 Retry-After）"
+    if hdrs.get("X-RateLimit-Remaining") == "0":
+        return "主限流"
+    if code == 429:
+        return "限流"
+    return "访问受限（HTTP %s，按限流保守处理）" % code
+
+
+def fetch_repo(full_name: str):
+    """GitHub API 查询仓库；返回 dict / None（确实不存在）/ "RATE_LIMITED" / "NETWORK_UNREACHABLE"。
+
+    限流必须与「仓库不存在」区分：限流或网络不通时无法判定≠无背书，误判 D 档是冤案。
     匿名公开接口即可调用（限额 60 次/时，日常核验足够）。
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"}
@@ -126,14 +154,19 @@ def fetch_repo(full_name: str):
         if e.code in (403, 429):
             body = ""
             try:
-                body = e.read(200).decode("utf-8", "ignore")
+                body = e.read(300).decode("utf-8", "ignore")
             except Exception:
                 pass
-            if "rate limit" in body.lower() or e.headers.get("X-RateLimit-Remaining") == "0":
-                print(f"    ⚠ GitHub API 限流（{e.code}），本次无法完成全部核验", file=sys.stderr)
-                return "RATE_LIMITED"
+            reason = _rate_limit_reason(e.code, body, e.headers)
+            print(f"    ⚠ GitHub API {reason}（HTTP {e.code}），本次无法完成全部核验",
+                  file=sys.stderr)
+            return "RATE_LIMITED"
         print(f"    ⚠ API 查询失败 {full_name}: HTTP {e.code}", file=sys.stderr)
         return None
+    except urllib.error.URLError as e:
+        # 网络不可达（DNS 不通 / 被墙 / 超时）——与「限流」分开报，便于国内网络场景给出正确处置建议
+        print(f"    ⚠ 网络不可达 {full_name}: {e.reason}", file=sys.stderr)
+        return "NETWORK_UNREACHABLE"
     except Exception as e:
         print(f"    ⚠ API 查询失败 {full_name}: {e}", file=sys.stderr)
         return None
@@ -161,7 +194,31 @@ def detect_agent_created(skill_dir: Path) -> bool:
     return bool(m)
 
 
-def audit_skill(skill_dir: Path) -> dict:
+def _repo_rank(info):
+    """仓库排序权重：厂商官方 org 优先，其次比星数。
+
+    v1.2.2 修复：旧实现纯按星数取最大，会让「高星非官方来源」压过「厂商官方来源」——
+    官方背书比星数硬，取错主仓库会让 A+ 档掉成 B 档。现官方优先。
+    """
+    owner = (info.get("full_name") or "").split("/")[0].lower()
+    return (1 if owner in OFFICIAL_ORGS else 0, info.get("stargazers_count", 0))
+
+
+def audit_skill(skill_dir: Path, allow_network: bool = True) -> dict:
+    """核验单个技能目录，返回结果 dict（含置信度）。
+
+    allow_network=False → 完全不发网络请求，但仍执行全部「本地可判」的判定
+    （自建/改造、市场件背书、来源声明解析），只把「上游实测档位」标为未查询。
+    v1.2.2 修复：旧版一断网就整维跳过，导致本地明明能判的自建/市场件也拿不到结论。
+    """
+    r = _audit_skill_inner(skill_dir, allow_network)
+    r["confidence"] = common.confidence_of(r.get("tier", ""))
+    if r.get("consistency"):
+        r["verdict"] = ((r.get("verdict") or "") + "；⚠ " + r["consistency"]).lstrip("；")
+    return r
+
+
+def _audit_skill_inner(skill_dir: Path, allow_network: bool = True) -> dict:
     """核验单个技能目录，返回结果 dict。"""
     r = {"name": skill_dir.name, "source": None, "version": None,
          "installed": None, "repos": [], "tier": "?", "verdict": "", "upstream_newer": False}
@@ -253,22 +310,55 @@ def audit_skill(skill_dir: Path) -> dict:
                         % "、".join(own_evidence))
         # 改造类若能定位上游，附上上游信息（不参与档位）
         if source_repos:
-            info0 = fetch_repo(source_repos[0])
-            if info0 == "RATE_LIMITED":
-                r["verdict"] += "（上游信息查询受限流影响，未获取）"
-            elif info0 and "full_name" in info0:
-                r["repos"].append({"repo": info0["full_name"], "stars": info0.get("stargazers_count", 0),
-                                   "fork": info0.get("fork", False), "parent": None, "parent_stars": None,
-                                   "pushed": (info0.get("pushed_at") or "")[:10]})
-                r["verdict"] += f"；上游={info0['full_name']}({info0.get('stargazers_count', 0)}★)"
+            if not allow_network:
+                r["verdict"] += "（离线模式：上游信息未获取）"
+            else:
+                info0 = fetch_repo(source_repos[0])
+                if info0 == "RATE_LIMITED":
+                    r["verdict"] += "（上游信息查询受限流影响，未获取）"
+                elif info0 == "NETWORK_UNREACHABLE":
+                    r["verdict"] += "（上游信息查询因网络不可达未获取）"
+                elif info0 and "full_name" in info0:
+                    r["repos"].append({"repo": info0["full_name"], "stars": info0.get("stargazers_count", 0),
+                                       "fork": info0.get("fork", False), "parent": None, "parent_stars": None,
+                                       "pushed": (info0.get("pushed_at") or "")[:10]})
+                    r["verdict"] += f"；上游={info0['full_name']}({info0.get('stargazers_count', 0)}★)"
         return r
 
     # 3) GitHub 溯源：仅"来源链接"参与判定，"提及链接"只展示
     repos = source_repos or mention_repos
     is_mention_only = not source_repos and bool(mention_repos)
+
+    # 3a) 跨来源一致性（v1.2.2 新增）：声明了多个来源、或提及了官方仓库却未声明为来源，
+    #     都属「人工需确认」的情形——本技能只提示，不下结论。
+    if len(source_repos) > 1:
+        r["consistency"] = "声明了 %d 个来源仓库（%s），请人工确认是否同一上游" % (
+            len(source_repos), "、".join(source_repos))
+    if is_mention_only:
+        off_mentions = [m for m in mention_repos
+                        if m.split("/")[0].lower() in OFFICIAL_ORGS]
+        if off_mentions:
+            r["consistency"] = "正文提及厂商官方仓库 %s 但未声明为来源（提及不进档位）" % (
+                "、".join(off_mentions))
+
     if is_mention_only:   # 提及不得进档位（F-1 / P0-3）：正文仅提及、未声明上游，需人工确认
         r["tier"] = "？ 来源未声明"
         r["verdict"] = "正文仅提及外部仓库、未声明其为本技能来源；提及不参与档位判定，需人工确认"
+        return r
+
+    # 3b) 离线模式：不发网络请求，但「本地可判」的结论照给（市场件背书等），
+    #     只把依赖 GitHub 实测的档位标为「未查询」——不因断网丢结论。
+    if not allow_network:
+        v = r["version"] or "未知版本"
+        if r["source"] == "marketplace" and meta and not meta.get("preinstalledTemplate") \
+                and any(meta.get(k) for k in MARKET_EVIDENCE):
+            r["tier"] = "A 官方背书"
+            r["verdict"] = (f"CodeBuddy 官方市场分发(v{v})，市场分发记录（本地声明，未与平台核对、"
+                            f"可被伪造）；离线模式未查询上游仓库，联网后重跑可补全")
+        else:
+            r["tier"] = "？ 上游未查询"
+            r["verdict"] = ("离线模式：未查询上游仓库，权威档位（B/B-/A+/C）无法判定"
+                            "（离线≠无背书）；联网后重跑即可补全")
         return r
 
     best = None  # (repo, info, parent)
@@ -277,6 +367,11 @@ def audit_skill(skill_dir: Path) -> dict:
         if info == "RATE_LIMITED":
             r["tier"] = "？ API受限"
             r["verdict"] = "GitHub API 限流，本次无法判定（限流≠无背书）；稍后重跑即可"
+            return r
+        if info == "NETWORK_UNREACHABLE":
+            r["tier"] = "？ 网络不可达"
+            r["verdict"] = ("GitHub API 网络不可达（DNS 不通/被墙/超时），本次无法判定"
+                            "（不可达≠无背书）；请检查网络或改用离线模式（仅本地可判项）")
             return r
         if not info or "full_name" not in info:
             continue
@@ -288,7 +383,8 @@ def audit_skill(skill_dir: Path) -> dict:
             "parent_stars": (parent or {}).get("stargazers_count") if parent else None,
             "pushed": (info.get("pushed_at") or "")[:10],
         })
-        if best is None or info.get("stargazers_count", 0) > best[1].get("stargazers_count", 0):
+        # v1.2.2：厂商官方优先于星数——官方背书比星数硬，不能让高星非官方压过官方
+        if best is None or _repo_rank(info) > _repo_rank(best[1]):
             best = (repo, info, parent)
 
     if best is None:
@@ -359,25 +455,43 @@ def audit_skill(skill_dir: Path) -> dict:
 def main():
     args = sys.argv[1:]
     base = SKILLS_DIR
+    root_origin = _ROOT_ORIGIN
+    rules_path = None
     if "--dir" in args:  # 自定义扫描目录：all --dir /path/to/skills
         i = args.index("--dir")
         try:
             base = Path(args[i + 1]).expanduser()
+            root_origin = "显式指定"
         except IndexError:
-            print("❌ --dir 需要一个目录路径，例如：provenance.py all --dir ~/my-skills")
-            sys.exit(1)
+            return common.fail("E_ARG_MISSING",
+                               "--dir 需要一个目录路径，例如：provenance.py all --dir ~/my-skills")
         args = args[:i] + args[i + 2:]
+    if "--rules" in args:  # v1.2.2：外部规则配置（名单/阈值不再必须改代码）
+        i = args.index("--rules")
+        try:
+            rules_path = args[i + 1]
+            args = args[:i] + args[i + 2:]
+        except IndexError:
+            return common.fail("E_ARG_MISSING",
+                               "--rules 需要一个配置文件路径，例如：provenance.py all --rules ./rules.json")
+    if rules_path:
+        _R, _N = common.load_rules(rules_path)
+        globals().update({
+            "TOP_STAR": _R["top_star"], "LOW_STAR": _R["low_star"],
+            "OFFICIAL_ORGS": set(_R["official_orgs"]),
+            "SELF_BUILT": set(_R["self_built"]),
+            "OWN_NAMESPACE": _R["own_namespace"],
+        })
+        root_origin += "；规则=%s" % rules_path
     arg = args[0] if args else "all"
     if not base.exists() or not base.is_dir():  # P1-6 边缘兜底：目录不存在/非目录不抛堆栈
-        print(f"❌ 扫描目录不存在或不是目录：{base}")
-        return
+        return common.fail("E_DIR_NOT_FOUND", str(base))
     try:
         targets = ([base / arg] if arg != "all"
                    else sorted(p for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").exists()
                                and not p.name.startswith(".") and ".bak" not in p.name))
     except OSError as e:
-        print(f"❌ 无法读取扫描目录 {base}：{e}")
-        return
+        return common.fail("E_DIR_UNREADABLE", "%s：%s" % (base, e))
     if not targets:
         print(f"未找到技能: {arg}（扫描目录：{base}）")
         return
@@ -385,21 +499,24 @@ def main():
         print(f"⚠ {targets[0].name} 目录下无 SKILL.md，可能不是有效技能目录")
 
     print(f"# 🔍 技能溯源核验报告（{len(targets)} 个）\n")
-    print("| 技能 | 来源 | 上游仓库(星数) | 档位 | 建议 |")
-    print("|---|---|---|---|---|")
+    print(f"> {common.describe_root(base, root_origin)}｜规则：{common.load_rules()[1]}\n")
+    print("| 技能 | 来源 | 上游仓库(星数) | 档位 | 置信度 | 建议 |")
+    print("|---|---|---|---|---|---|")
     n = len(targets)
     for i, d in enumerate(targets, 1):
         print(f"[{i}/{n}] 核验中: {d.name} …", file=sys.stderr, flush=True)  # 进度走 stderr，不污染报告
         try:
             r = audit_skill(d)
         except Exception as e:   # 单技能坏 meta/异常 → 降级而非中断整批（P0-4 / F-3）
-            print(f"| {d.name} | — | — | **？ 核验异常** | 核验出错：{type(e).__name__}: {e} |")
+            print(f"| {d.name} | — | — | **？ 核验异常** | 低 | 核验出错（{type(e).__name__}）：{e} |")
             continue
         # 多仓库全部展示（来源优先，已在前），用 <br> 换行保证 md 表格可读
         lines = [f"{x['repo']}({x['stars']}★)" for x in r["repos"]]
         repo_str = "<br>".join(lines) if lines else "—"
         src = r["source"] or ("UPSTREAM-MERGE" if (d / "UPSTREAM-MERGE.md").exists() else "—")
-        print(f"| {r['name']} | {src} | {repo_str} | **{r['tier']}** | {r['verdict']} |")
+        print(f"| {r['name']} | {src} | {repo_str} | **{r['tier']}** | {r.get('confidence', '低')} | {r['verdict']} |")
+
+    print("> 置信度：高＝GitHub 公开数据实测；中＝本地元数据/名单/台账（未与平台核对，可被伪造）；低＝证据不足或未能取证。")
 
     print("\n> 分工：本报告只管\"正不正宗\"；\"安不安全\"请对可疑项跑官方 skills-sec-audit。")
 

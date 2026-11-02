@@ -34,21 +34,40 @@ def _raise(d):
 
 
 def test_offline_mode():
+    """v1.2.2：断网不再整维跳过——本地可判项照给，上游档位标「？ 上游未查询」。"""
     old = og.network_available
-    og.network_available = lambda timeout=8: False
+    og.network_available = lambda timeout=8: (False, "E_NET_UNREACHABLE", "测试模拟断网")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             d = _mk(Path(tmp), "s")
             r = og.audit_origin(d)
-            assert r["pv"]["tier"] == "⏭ 离线跳过", f"离线应标跳过，实得 {r['pv']['tier']}"
+            assert r["pv"]["tier"] == "？ 上游未查询", f"离线应标上游未查询，实得 {r['pv']['tier']}"
             assert "score" in r["pq"], "pq 应正常返回"
+            assert r["pv"].get("confidence") == "低", "未能取证应为低置信度"
+    finally:
+        og.network_available = old
+
+
+def test_offline_keeps_local_marketplace_tier():
+    """v1.2.2 反例：断网时，本地元数据能判的市场件仍应给 A 官方背书（旧版整维跳过→白丢结论）。"""
+    old = og.network_available
+    og.network_available = lambda timeout=8: (False, "E_NET_UNREACHABLE", "断网")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _mk(Path(tmp), "s")
+            (d / "_meta.json").write_text(
+                '{"slug": "s", "source": "marketplace", "skillId": "123", "ownerId": "9",'
+                ' "publishedAt": 1700000000000, "version": "1.0.0"}', encoding="utf-8")
+            r = og.audit_origin(d)
+            assert r["pv"]["tier"] == "A 官方背书", f"断网也应保留本地背书判定，实得 {r['pv']['tier']}"
+            assert r["pv"].get("confidence") == "中", "本地元数据证据应为中置信度"
     finally:
         og.network_available = old
 
 
 def test_audit_exception_degrades():
     old_net, old_audit = og.network_available, og.pv.audit_skill
-    og.network_available = lambda timeout=8: True
+    og.network_available = lambda timeout=8: (True, "", "")
     og.pv.audit_skill = _raise
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -62,8 +81,8 @@ def test_audit_exception_degrades():
 def test_normal_merge():
     fake_pv = {"name": "s", "tier": "自建/改造", "verdict": "v"}
     old_net, old_audit = og.network_available, og.pv.audit_skill
-    og.network_available = lambda timeout=8: True
-    og.pv.audit_skill = lambda d: dict(fake_pv)
+    og.network_available = lambda timeout=8: (True, "", "")
+    og.pv.audit_skill = lambda d, allow_network=True: dict(fake_pv)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             d = _mk(Path(tmp), "s")

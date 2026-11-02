@@ -1,0 +1,29 @@
+{
+  "top_star": 1000,
+  "low_star": 100,
+  "official_orgs": [
+    "anthropics",
+    "openai",
+    "google-labs-code",
+    "google-gemini",
+    "googleworkspace",
+    "microsoft",
+    "github",
+    "vercel-labs"
+  ],
+  "self_built": [
+    "zhiduku",
+    "hongloumeng",
+    "pdf-to-md",
+    "read-oversized-image",
+    "msd-home-manual",
+    "relation-scope",
+    "docx-template-fill",
+    "docx-track-changes-wps",
+    "skill-origin",
+    "maoxuan",
+    "skill-miner",
+    "rule-miner"
+  ],
+  "own_namespace": "indiv-mabin"
+}
