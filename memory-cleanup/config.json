@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "_comment": "memory-cleanup v1.0.2 配置模板。四个参数，键可缺省：缺省、类型错或越界即回退该键的预设值，不影响其余键，也不中断流程。改后下次运行生效。trash_aged_days 为归档区停留天数：文件搬进归档区后停 N 天、经确认再最终删除；回收站侧停留时长技能不测量、不计入受控后悔期。",
+  "swap_warn_mb": 10240,
+  "wechat_max_procs": 20,
+  "trash_aged_days": 7,
+  "agent_browser_path": ""
+}
