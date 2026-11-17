@@ -21,6 +21,16 @@ description: Agent 工作机（macOS）内存巡检与收尾。先读 config 阈
   3. **可配置阈值 ＋ 首运行诊断建议**——阈值随机器内存档位走，不写死。
 - **明确不做**：Windows 版（判据体系不同，属重写不属改造）；进程"优化加速"类泛清理；对任何有用户状态的进程做主动终止。
 
+**全流程速查**（每轮按此顺序走，各步口径不变；命令模板都在对应节内照抄可跑）：
+
+| 步 | 动作 | 关键口径 | 详见 |
+|---|---|---|---|
+| ① 读阈值 | 读 config、报当前值 | **每次都跑**，报告头三行缺一不可 | §四 |
+| ② 巡检 | 空闲／swap／实例数／微信进程 四项 | 只读，不动任何进程 | §五 |
+| ③ 清理 | 白名单杀＋基线→清理→验证闭环 | 两个前置条件缺一不动手 | §六 |
+| ④ 回收站 | `~/.Trash` 顶层搬入归档区，超龄经确认才删 | 两段式，绝不直接清空 | §七 |
+| ⑤ 报告 | 固定五段，先结论后数字 | 前后对比说话，swap 通常不降 | §八 |
+
 ## 二、适用场景与触发语
 
 | 场景 | 典型触发语 | 动作类型 |
@@ -239,9 +249,11 @@ done
 ### 6.2 基线 → 清理 → 验证（闭环三步，缺一步则本轮结论不成立）
 
 ```bash
-# 先判空：空模式串不是"什么都没匹配"，而是"根本没查"（见下方注）
+# 先判空＋判存在：空模式串是"假阴性"（见下方注）；路径不存在则是"假动作"（评 2026-11-17：路径校验）
 if [ -z "$AGENT_PATH" ]; then
   echo "agent 路径未设：按预设跳过清理步，本轮只出巡检与建议"
+elif [ ! -e "$AGENT_PATH" ]; then
+  echo "提示：agent 路径不存在（$AGENT_PATH），清理步跳过，本轮只出巡检与建议；请核对 config 的 agent_browser_path 后重跑"
 else
   TARGET="$AGENT_PATH"
 
@@ -284,9 +296,14 @@ fi
 ### 7.1 归档搬运（进入日期文件夹）
 
 ```bash
-AGED="${AGED:-$HOME/.Trash.aged}"; TODAY=$(date +%F); mkdir -p "$AGED/$TODAY"
-find "$HOME/.Trash" -maxdepth 1 -mindepth 1 ! -name ".DS_Store" -print0 | \
-  while IFS= read -r -d '' f; do mv "$f" "$AGED/$TODAY/" 2>/dev/null || printf '搬移失败（保留原位）：%s\n' "$f"; done
+AGED="${AGED:-$HOME/.Trash.aged}"; TODAY=$(date +%F)
+# 归档区先校验可创建：不可创建就整轮跳过搬移（原位保留），不逐项硬撞（评 2026-11-17：路径校验）
+if ! mkdir -p "$AGED/$TODAY" 2>/dev/null; then
+  echo "提示：归档区不可创建（$AGED），回收站搬移本轮跳过（文件原位保留）；检查磁盘空间与权限后重跑"
+else
+  find "$HOME/.Trash" -maxdepth 1 -mindepth 1 ! -name ".DS_Store" -print0 | \
+    while IFS= read -r -d '' f; do mv "$f" "$AGED/$TODAY/" 2>/dev/null || printf '搬移失败（保留原位）：%s\n' "$f"; done
+fi
 ```
 
 ### 7.2 列出超龄归档（只列出，不删）
