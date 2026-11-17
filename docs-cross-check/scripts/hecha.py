@@ -10,7 +10,7 @@
     python3 hecha.py cross 路径/到/*.docx         # 横切：重复指标 + 篇幅表
     python3 hecha.py doc f.docx --json            # 机读
 退出码：0 全部通过；1 有告警；2 参数/依赖错误
-错误码：E1 缺依赖 / E2 文件不存在 / E3 非 .docx / E4 文件打不开或已损坏
+错误码：E1 缺依赖 / E2 文件不存在 / E3 非 .docx / E4 文件打不开或已损坏 / E5 文件已加密或受密码保护
 """
 import sys
 
@@ -40,9 +40,23 @@ METRIC_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)(万|亿|%|项|个|家|人|篇
 
 def load_paras(path):
     # E4：扩展名是 .docx 但内容损坏/打不开，python-docx 会抛异常。
-    # 不让它裸 traceback，也不静默跳过——整批中止并点名文件，口径同 E3。
+    # E5：加密/受保护的 .docx 是 OLE2 容器（魔数 D0 CF 11 E0），不是 zip 包，同样抛异常但处置不同
+    # （E4 靠重新另存能修好；E5 必须先解密，另存也救不了，所以要分码点名）。
+    # 两者都不裸 traceback、不静默跳过——整批中止并点名文件，口径同 E3。
     try:
+        with open(path, "rb") as fh:
+            magic = fh.read(8)
+        if magic == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+            sys.stderr.write(
+                f"[E5] 文件已加密或受密码保护（OLE2 复合文档，非明文 .docx）：{path}\n"
+                "  我已做的：未输出任何判据结论、未改动任何文件。\n"
+                "  需要你做的：先用对应程序输入密码打开，另存为明文 .docx（或去掉打开密码）后整批重跑；"
+                "仅剔除该篇会导致篇幅中位与跨篇重复偏移，不要只跳过这一篇（口径同 E3/E4）。\n"
+            )
+            raise SystemExit(2)
         doc = docx.Document(str(path))
+    except SystemExit:
+        raise
     except Exception as exc:
         sys.stderr.write(
             f"[E4] 文件打不开或内容已损坏：{path}\n"
