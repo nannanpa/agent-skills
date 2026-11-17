@@ -145,6 +145,6 @@ frontmatter 只用 `name` + `description`（两端都认）；**不要**加 `dis
 | 技能 | 管什么 | 获取 |
 |---|---|---|
 | `docx-track-changes-wps` | 修订／批注的写入、计数与回退（交印前修订归零） | [GitHub Release v1.1.1](https://github.com/nannanpa/agent-skills/releases/tag/docx-track-changes-wps-v1.1.1) |
-| `lieflat-gongwen` | 文种参数与字数配额（文种行文规范） | 仅作者环境可用，暂无公开渠道；发布后此处补链接 |
+| `lieflat-gongwen` | 文种参数与字数配额（语料统计的公文写作量化参数与骨架） | [原作 GitHub · larashero3-dotcom/lieflat-gongwen](https://github.com/larashero3-dotcom/lieflat-gongwen)；另有面向高校申报/规划材料的适配改造（作者自用，未公开） |
 
 > 单篇内容的审读方法（"怎么审"）与审完后的跨技能通讯（"怎么桥接"）目前是内部规程与在建方向（agent-bridge 同族），独立成技能后此处会更新指向。
