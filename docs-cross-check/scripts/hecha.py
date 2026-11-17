@@ -10,6 +10,7 @@
     python3 hecha.py cross 路径/到/*.docx         # 横切：重复指标 + 篇幅表
     python3 hecha.py doc f.docx --json            # 机读
 退出码：0 全部通过；1 有告警；2 参数/依赖错误
+错误码：E1 缺依赖 / E2 文件不存在 / E3 非 .docx / E4 文件打不开或已损坏
 """
 import sys
 
@@ -38,7 +39,20 @@ METRIC_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)(万|亿|%|项|个|家|人|篇
 
 
 def load_paras(path):
-    doc = docx.Document(str(path))
+    # E4：扩展名是 .docx 但内容损坏/打不开，python-docx 会抛异常。
+    # 不让它裸 traceback，也不静默跳过——整批中止并点名文件，口径同 E3。
+    try:
+        doc = docx.Document(str(path))
+    except Exception as exc:
+        sys.stderr.write(
+            f"[E4] 文件打不开或内容已损坏：{path}\n"
+            f"  底层错误：{type(exc).__name__}: {exc}\n"
+            "  我已做的：未输出任何判据结论、未改动任何文件。\n"
+            "  需要你做的：确认该文件是否真是有效的 .docx——扩展名改成 .zip 能解开则结构完好，"
+            "打不开请用 Word 重新另存为 .docx；剔除或修好后整批重跑，不要只跳过这一篇"
+            "（少一篇篇幅中位与跨篇重复就会偏，见 E3）。\n"
+        )
+        raise SystemExit(2)
     out = []
     for p in doc.paragraphs:
         t = p.text.strip()
@@ -120,7 +134,13 @@ def cmd_cross(paths, as_json):
     cols = [r["字数_去空白"] for r in rows]
     cs = sorted(cols)
     # §四 D4：少于 5 篇不报中位——两篇时中位就是较大那篇，没有意义，只看极差
-    med = cs[len(cs) // 2] if len(cs) >= 5 else 0
+    # 偶数篇取中间两值平均（M16 纪律）：cs[n//2] 只在奇数篇时对，偶数篇取上中位会偏高。
+    n = len(cs)
+    if n >= 5:
+        mid = n // 2
+        med = cs[mid] if n % 2 else (cs[mid - 1] + cs[mid]) / 2
+    else:
+        med = 0
     over = [r for r in rows if med and r["字数_去空白"] > med * 1.3]
 
     # D3 分两层：篇内重复（同一篇同一数值出现 ≥2 次，多为"目标写一遍、举措再写一遍"）
