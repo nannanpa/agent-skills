@@ -5,7 +5,7 @@ description: 同构多篇材料（同一模板、多个二级单位/多项目各
 
 # docs-cross-check · 同构材料横切审校（横向一致性复核）
 
-> 版本 **1.0.1**（2026-11-17）｜ 平台 macOS／Linux／Windows ｜ 依赖 `python3` + `python-docx`；无网络、无外部服务
+> 版本 **1.0.2**（2026-11-18）｜ 平台 macOS／Linux／Windows ｜ 依赖 `python3` + `python-docx`；无网络、无外部服务
 > 范围口径：**只做"横向对得齐"**。单篇内容对不对（事实、引文、口径是否合理），本技能不审、需人工审读把关；修订与批注怎么写进去，归 `docx-track-changes-wps`；文种参数与字数配额，归 `lieflat-gongwen`。各技能获取方式见文末 §十。
 
 ---

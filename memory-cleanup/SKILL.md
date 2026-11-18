@@ -5,7 +5,7 @@ description: Agent 工作机（macOS）内存巡检与收尾。先读 config 阈
 
 # memory-cleanup · Agent工作机（Mac）内存清理（只读巡检 ＋ 白名单）
 
-> 版本 **1.0.3** ｜ 平台 macOS（Apple Silicon / Intel 通用）｜ 依赖 `bash`、`pgrep`、`sysctl`；`jq` 可选（缺则降级）
+> 版本 **1.0.4** ｜ 平台 macOS（Apple Silicon / Intel 通用）｜ 依赖 `bash`、`pgrep`、`sysctl`；`jq` 可选（缺则降级）
 > 本技能的判据来源：本机命令行与路径证据。**所有归属类判断（某进程属于哪个程序、某路径属于哪个工具）均为本地证据，不构成对该进程用途或安全性的授权依据**；证据不足时先问用户，不按推断动手。
 
 ---
@@ -84,7 +84,7 @@ export SKILL_DIR="$HOME/.claude/skills/memory-cleanup"
 ### 4.3 读取逻辑（含回退，直接整块跑）
 
 ```bash
-# ==== memory-cleanup 阈值读取 v1.0.3 · 开始 ====
+# ==== memory-cleanup 阈值读取 v1.0.4 · 开始 ====
 : "${SKILL_DIR:?请先把 SKILL_DIR 设为 memory-cleanup 技能安装目录}"
 CONFIG="${MC_CONFIG:-$SKILL_DIR/config.json}"   # MC_CONFIG 仅供排查：临时指向另一份 config
 
@@ -141,7 +141,7 @@ if [ -z "${MC_CONFIG:-}" ] && [ "$MC_SRC" = "无 config" ] && [ -w "$SKILL_DIR" 
   cat >"$CONFIG" <<'JSON'
 {
   "schema_version": 1,
-  "_comment": "memory-cleanup v1.0.3 配置模板。四个参数，键可缺省：缺省、类型错或越界即回退该键的预设值，不影响其余键，也不中断流程。改后下次运行生效。trash_aged_days 为归档区停留天数：文件搬进归档区后停 N 天、经确认再最终删除；回收站侧停留时长技能不测量、不计入受控后悔期。",
+  "_comment": "memory-cleanup v1.0.4 配置模板。四个参数，键可缺省：缺省、类型错或越界即回退该键的预设值，不影响其余键，也不中断流程。改后下次运行生效。trash_aged_days 为归档区停留天数：文件搬进归档区后停 N 天、经确认再最终删除；回收站侧停留时长技能不测量、不计入受控后悔期。",
   "swap_warn_mb": 10240,
   "wechat_max_procs": 20,
   "trash_aged_days": 7,
@@ -150,7 +150,7 @@ if [ -z "${MC_CONFIG:-}" ] && [ "$MC_SRC" = "无 config" ] && [ -w "$SKILL_DIR" 
 JSON
   [ -f "$CONFIG" ] && MC_GEN="1"
 fi
-# ==== memory-cleanup 阈值读取 v1.0.3 · 结束 ====
+# ==== memory-cleanup 阈值读取 v1.0.4 · 结束 ====
 ```
 
 ### 4.4 首运行报告（每次运行都带，不只首次）
