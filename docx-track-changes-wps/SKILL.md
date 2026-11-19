@@ -1,7 +1,19 @@
 ---
 name: docx-track-changes-wps
-version: "1.1.1"
-description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment）时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承（与人工输入观感一致）、批注写入（说明"为什么改"）、导出修订批注清单、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、修订格式不匹配、批注、修改意见清单。
+version: "1.2.0"
+description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment），并合并多稿逐处标注来源、按外部意见清单批量改稿时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承、批注写入、导出修订批注清单、底纹着色标注多稿来源、整合说明图例页、按意见编号批量编排改稿、整段替换与段落/标题插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、批注、修改意见清单、合并多稿、多稿整合、三色标注、底纹标注、逐处标注来源、按意见改稿、整段替换。
+author: 马斌（nannanpa）
+contributors:
+  - 和欣月：2026-11-19 贡献合并多稿三色底纹标注、整合图例页、按 9 条意见逐处改稿的原料（提炼自其端真实任务、脱敏回传），并入 1.2.0 的 merge_markup.py。
+slug: docx-track-changes-wps
+displayName: Word修订模式插入
+summary: python-docx+lxml 向 .docx 写入修订标记与批注、合并多稿底纹标注、按意见批量改稿（WPS 安全）：勘误、格式继承、三色标注、整段替换，导出修订批注清单
+license: MIT
+tags:
+  - Word
+  - docx
+  - 修订模式
+  - WPS
 ---
 
 # docx-track-changes-wps
@@ -175,6 +187,57 @@ python3 scripts/export_markup.py 产物.docx -o 修改意见清单.md
 
 产出两张表：**修订标记表**（段落／插入或删除／内容／作者／日期）与**批注表**（段落／锚定文字／批注内容／作者／日期）。这正是"修改意见报送"要交的那份清单。加 `--json` 可程序化消费。
 
+## 合并多稿：底纹标注来源与图例页（1.2.0 新增）
+
+**场景**：把两位领导各自修改的同一份稿子合并成整合版，要求"每处改动看得出来自谁"。这不是勘误（不是谁对谁错），而是**并存标注**——用不同底色区分来源，附一页图例说明。
+
+**与修订标记的关系**：底纹（`w:shd`）与修订标记（`w:ins`/`w:del`）是**两套并行机制**，如同批注——
+
+| 机制 | 回答的问题 | 脚本 |
+|---|---|---|
+| 修订标记 `w:ins`/`w:del` | 改了什么（可接受/拒绝） | `apply_track_changes.py` |
+| 批注 `w:comment` | 为什么改 | `add_comment.py` |
+| 底纹 `w:shd` | 这处改动来自谁 | `merge_markup.py` |
+
+**WPS 安全约束**：`w:shd` 只放进 run 的 `w:rPr`，`w:val=clear`／`w:color=auto`／`w:fill=颜色`；实测三色 `CCFFCC`（版本甲）／`CCE5FF`（版本乙）／`FFFF99`（两者表述差异）在 WPS 正常显示。不碰 body 级 `sectPr`；字体继承锚点 run，不凭空造不存在的字体。
+
+```python
+from merge_markup import shade_run, shaded_run, add_legend_page, FILL_GREEN, FILL_BLUE
+
+p = doc.add_paragraph()
+shaded_run(p, "甲版本的新增表述", FILL_GREEN)
+shaded_run(p, "乙版本的建议表述", FILL_BLUE, italic=True)
+add_legend_page(doc)   # 文末追加"整合版本 · 标注说明"图例页
+```
+
+**跨文档按段拼整合正文**（`merge_by_paragraph(base, incoming)`）：原料原始任务是"两位领导整份稿按段比对后拼成整合正文"。**比对取舍是内容判断，脚本不代判**——该函数只按段落 index 对齐，标出 `base_only`／`incoming_only`／`differ`／`both`，由人决定每段取哪版再着色合并。把"机械对齐"和"内容取舍"分开，避免脚本替人做主。
+
+## 按意见清单逐处改稿（1.2.0 新增）
+
+**场景**：领导给了编号意见（1–9 条），每条对应"某段怎么改"——整段重写、段内插入、新增章节、改错字。人工逐条找位置容易漏，用配置把"意见→改动"固化下来批量落地。
+
+**接口**（`scripts/merge_markup.py`）：
+
+| 接口 | 用途 |
+|---|---|
+| `replace_paragraph(doc, p_idx, text)` | 整段正文替换（保留 pPr 与原字体，不做修订标记） |
+| `insert_paragraph_after(doc, p_idx, text)` | 指定段后插入新段落 |
+| `insert_heading_after(doc, p_idx, text)` | 指定段后插入黑体标题（新增章节用） |
+| `apply_opinions(doc, config)` | 按"意见编号→改动"配置批量编排 |
+| `merge_by_paragraph(base, incoming)` | 两稿按段对齐，返回取舍清单 |
+
+```python
+from merge_markup import apply_opinions
+config = {"opinions": [
+    {"id": 1, "op": "replace_para", "p_idx": 5, "text": "重写后的整段…"},
+    {"id": 2, "op": "insert_after",  "p_idx": 8, "text": "（新增补充说明）"},
+    {"id": 3, "op": "heading_after", "p_idx": 9, "text": "五、征集意见情况"},
+]}
+results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"), …]
+```
+
+**边界**：`apply_opinions` 对每条改动返回 `ok`／`skipped`／`error`，**不静默吞错**；`correct`（勘误）类需显式注入 `apply_track_changes.apply_del`，未注入则标 `skipped:no_apply_del`。整段替换是**直接改写**（不留旧字），与"勘误留痕"的 `apply_del` 用途不同——按意见重写整段用前者，改错字用后者，别混。
+
 ## 适用环境与未验证声明（诚实边界）
 
 - **实测环境**：macOS + WPS。开发、调试、彩虹圈规避清单均来自 macOS 版 WPS 的实测。
@@ -213,6 +276,7 @@ python3 scripts/export_markup.py 产物.docx -o 修改意见清单.md
 - **`w:del` 内残留 `w:t` = 删除没生效**：删除标记里的文本必须是 `w:delText`。手写 XML 时最容易漏这一处转换，表现是"接受修订后旧字还在"。`make_del()` 自动处理，`verify()` 自动断言，别手改。
 - **插入内容格式与正文不一致（1.1.0 实战踩到）**：脚本插入的文字掉回文档默认字体，一眼能看出"不是同一个人打的字"——与人工在 Word 里输入的观感不符。根因是插入的 `w:r` 缺 `w:rPr`（旧版 `make_ins()` 不带 rPr）。对策：`make_ins()` 现已继承锚点 rPr（`_rpr_for()`）；若你手写 XML 或用了旧版脚本，务必把锚点 run 的 `w:rPr` 复制进 `w:ins` 内的 `w:r`，且放在 `w:t` **之前**（schema 要求 rPr 在前）。
 - **继承来的 `w:rPr` 里带 `w:rPrChange` 会让文件打不开**：`w:rPrChange` 是格式修订标记，复制过来会形成嵌套修订，Word/WPS 可能拒开。`_rpr_for()` 已自动剔除，手写时也要删。
+- **Windows 终端中文乱码：脚本里的中文写成 `\uXXXX` 转义，运行时加 `-X utf8`**（1.2.0 新增，来自她端 Windows 实测）：在 Windows 终端直接跑含中文的 python-docx 脚本会编码报错。把脚本中所有中文字符串写成 `\uXXXX` 转义形式，运行时用 `python -X utf8 script.py`，可绕开终端默认编码问题。本技能脚本用直接中文（macOS 环境正常），**在 Windows 上若报编码错，按此法改写后再跑**；此为环境适配，不是修订机制的缺陷。
 - **批注找不到锚点，多半是锚点在修订标记里**（1.1.0 实战踩到）：`paragraph.runs` 只返回段落的**直系** `w:r`，`w:ins`/`w:del` 里的 run 它看不到。而"给某处删除写批注"是最常见用法——必然落在 `w:del` 里。对策：`add_comment()` 直接在段落 XML 树上找（穿透 `w:ins`/`w:del`），并自动把批注范围包住整个修订标记；手写锚点时同理。
 - **`commentReference` 排在了 `commentRangeEnd` 前面**（1.1.0 实战踩到）：顺序必须是 `start → 内容 → end → reference`。写反了文件能打开、WPS 却不显示批注，排查时容易误判成"批注没写进去"。`verify(check_comments=True)` 已断言顺序。
 

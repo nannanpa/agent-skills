@@ -10,6 +10,9 @@ C. 勘误：w:del + w:delText + 可选 w:ins 替换（1.1.0）。
 D. 段内字符偏移插入（1.1.0）。
 E. 格式继承（1.1.0）：插入内容必须带锚点 run 的 w:rPr，否则文字掉回文档默认
    字体——与人工在 Word 里输入的观感不一致（真实公文实测发现）。
+F. 批注（1.1.0）与导出清单。
+G. 合并多稿（1.2.0）：w:shd 三色底纹、图例页、整段替换、段落/标题插入、
+   按意见清单批量编排（逐条返回状态不静默）、两稿按段对齐。
 跑通 = 全部断言通过。Windows WPS 首次使用前，另需人工完成 SKILL.md
 "适用环境与未验证声明"里的三步验收（打开/显示/接受拒绝修订）。
 """
@@ -249,6 +252,76 @@ def main():
     assert len(data["comments"]) == 1, f"应导出 1 条批注，实得 {len(data['comments'])}"
     assert data["comments"][0]["text"] == "此处原为错字，已改", "批注内容导出错"
     print("导出清单: 修订", len(data["revisions"]), "批注", len(data["comments"]))
+
+    # ── 场景 G（1.2.0 新增）：合并多稿 / 底纹标注 / 意见编排 ──────────
+    from merge_markup import (shade_run, shaded_run, add_legend_page,
+                              replace_paragraph, insert_paragraph_after,
+                              insert_heading_after, apply_opinions,
+                              merge_by_paragraph, FILL_GREEN, FILL_BLUE)
+
+    srcg = os.path.join(tmpdir, "srcg.docx")
+    outg = os.path.join(tmpdir, "outg.docx")
+    dg = docx.Document()
+    dg.add_paragraph("甲版本原段落内容。")
+    dg.add_paragraph("乙版本原段落内容，需按意见重写。")
+    dg.add_paragraph("待补充章节的位置。")
+    dg.save(srcg)
+    docg = docx.Document(srcg)
+
+    # G1 底纹着色：三色 w:shd，实测结构合法
+    pg = docg.add_paragraph()
+    shaded_run(pg, "甲版本新增表述", FILL_GREEN)
+    shaded_run(pg, "乙版本建议表述", FILL_BLUE, italic=True)
+
+    # G2 图例页
+    add_legend_page(docg)
+
+    # G3 整段替换 + 段落/标题插入
+    replace_paragraph(docg, 1, "按领导意见重写后的整段正文。")
+    insert_paragraph_after(docg, 2, "（新增补充说明）")
+    insert_heading_after(docg, 2, "五、征集意见情况")
+
+    docg.save(outg)
+    zg = zipfile.ZipFile(outg)
+    assert zg.testzip() is None, "场景G zip损坏"
+    bg = etree.fromstring(zg.read("word/document.xml"))
+    shds = bg.findall(".//" + qn("w:shd"))
+    fills = [s.get(qn("w:fill")) for s in shds]
+    assert FILL_GREEN in fills and FILL_BLUE in fills, \
+        f"底纹着色未写入: {fills}"
+    for s in shds:
+        assert s.get(qn("w:val")) == "clear" and s.get(qn("w:color")) == "auto", \
+            "w:shd 属性不合法（应 val=clear/color=auto）"
+    txtg = "".join(t.text or "" for t in bg.findall(".//" + qn("w:t")))
+    assert "按领导意见重写后的整段正文。" in txtg, "整段替换失败"
+    assert "（新增补充说明）" in txtg and "五、征集意见情况" in txtg, "段落/标题插入失败"
+    assert "整合版本" in txtg and "标注说明" in txtg, "图例页未生成"
+    print("场景G 底纹数:", len(shds), "fills:", sorted(set(fills)))
+
+    # G4 意见清单编排：逐条返回状态，不静默吞错
+    srch = os.path.join(tmpdir, "srch.docx")
+    docx.Document().save(srch)
+    doch = docx.Document(srch)
+    doch.add_paragraph("段落零")
+    doch.add_paragraph("段落一")
+    cfg = {"opinions": [
+        {"id": 1, "op": "replace_para", "p_idx": 0, "text": "改后段落零"},
+        {"id": 2, "op": "insert_after", "p_idx": 1, "text": "补充"},
+        {"id": 3, "op": "heading_after", "p_idx": 1, "text": "新标题"},
+        {"id": 4, "op": "correct", "p_idx": 0, "phrase": "x", "text": "y"},
+        {"id": 5, "op": "bogus", "p_idx": 0},
+    ]}
+    results = apply_opinions(doch, cfg)
+    st = {oid: status for oid, op, status in results}
+    assert st[1] == "ok" and st[2] == "ok" and st[3] == "ok", f"编排失败: {results}"
+    assert st[4] == "skipped:no_apply_del", f"correct 未注入时应标注跳过: {st[4]}"
+    assert st[5].startswith("skipped:unknown_op"), f"未知 op 应标注跳过: {st[5]}"
+    print("场景G 意见编排:", results)
+
+    # G5 两稿按段对齐（机械对齐，不代判内容）
+    aligned = merge_by_paragraph(["甲段", "相同"], ["乙段", "相同", "仅乙有"])
+    assert [x["status"] for x in aligned] == ["differ", "both", "incoming_only"], \
+        f"按段对齐错: {aligned}"
 
     print("SELF-TEST OK")
 
