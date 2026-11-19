@@ -1,6 +1,6 @@
 ---
 name: docx-track-changes-wps
-version: "1.2.2"
+version: "1.2.3"
 description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment），并合并多稿逐处标注来源、按外部意见清单批量改稿时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承、批注写入、导出修订批注清单、底纹着色标注多稿来源、整合说明图例页、按意见编号批量编排改稿、整段替换与段落/标题插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、批注、修改意见清单、合并多稿、多稿整合、三色标注、底纹标注、逐处标注来源、按意见改稿、整段替换。
 author: 马斌（nannanpa）
 contributors:
@@ -194,7 +194,7 @@ save_with_comments(doc, out)          # 保存 + 注入批注
 **两条硬规矩**：
 
 1. `commentReference` 必须排在其 `commentRangeEnd` **之后**（写反了 WPS 显示不出批注——1.1.0 实战踩到）；
-2. 批注 id 从 1 起递增，且 `comments.xml` 的 id 与正文锚点三方（start/end/reference）必须完全一致。
+2. 批注 id 从**文档既有批注 id 最大值＋1** 起递增（1.2.3 更正：起号前扫描正文锚点三方与已有 `comments.xml` 部件——文档自带批注史时固定 1 起号必然撞号，Word/WPS 批注显示错乱甚至拒开，与修订 `w:id` 撞号同源），且 `comments.xml` 的 id 与正文锚点三方（start/end/reference）必须完全一致。
 
 **校验**：`verify(path, check_comments=True)` 会逐项断言——部件存在、Content_Types 已登记、rels 已登记、每个批注有 id/author/date/正文、三方 id 配对、reference 顺序正确。
 
@@ -257,6 +257,8 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 
 **边界**：`apply_opinions` 对每条改动返回 `ok`／`skipped`／`error`，**不静默吞错**；`correct`（勘误）类需显式注入 `apply_track_changes.apply_del`，未注入则标 `skipped:no_apply_del`。整段替换是**直接改写**（不留旧字、不留痕），与"勘误留痕"的 `apply_del` 用途不同——按意见重写整段用前者，改错字用后者，别混。
 
+**同段冲突检测（1.2.3）**：同一份 config 里，先做过 `correct` 的段落再执行 `replace_para` 会**吞掉该段勘误留痕**（清场语义）——这类组合不执行，返回 `skipped:conflict:p_idxN已做过勘误留痕…` 并给处置建议（两条意见合成一条 replace_para，或删掉 correct 条目）。其余组合（replace→replace、replace→correct）不拦。
+
 **整段替换的两条硬规矩（1.2.1）**：
 
 1. `replace_paragraph` 清的是**全部内容**：直系 run、既有 `w:ins`/`w:del` 修订包裹、超链接/域（内部藏 run）、批注锚点三件，全部随替换消失——只保留段落格式（pPr）与书签。1.2.0 及更早版本只清直系 run，**段内既有修订文字会残留**（v1.2.0 评测点名、代码级实锤），已在本版修复。
@@ -301,6 +303,8 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 
 （Python 库接口不走退出码，保持抛异常——由调用方 `try/except` 捕获后自行决定处置。）
 
+**四个脚本的退出码已统一同口径**（1.2.3 起）：`apply_track_changes.py`／`merge_markup.py`／`add_comment.py` 均为 0/1/2（后两者保存后自动跑完整性/批注校验，失败退 2）；`export_markup.py` 为只读导出、无产物，只用 0/1。
+
 ## 已知坑
 
 - **锚点短语里藏隐藏字符。** 中文文档常在看似纯文本的地方嵌着 `》（U+300B）`、`「（U+300C）`、`—（U+2014）` 等（如 `《…（2025—2027年）》` 实际以 `年）》。` 结尾）。直接写锚点 `"年），"` 会匹配失败，因为中间藏着 `》`。**构造复杂锚点时用显式 Unicode 转义**（`"年"+"\uFF09"+"\u300B"+"\uFF0C"`），并且/或者先打印候选 run 的 `repr()` 确认精确字符再匹配。
@@ -314,6 +318,8 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 - **批注找不到锚点，多半是锚点在修订标记里**（1.1.0 实战踩到）：`paragraph.runs` 只返回段落的**直系** `w:r`，`w:ins`/`w:del` 里的 run 它看不到。而"给某处删除写批注"是最常见用法——必然落在 `w:del` 里。对策：`add_comment()` 直接在段落 XML 树上找（穿透 `w:ins`/`w:del`），并自动把批注范围包住整个修订标记；手写锚点时同理。
 - **`commentReference` 排在了 `commentRangeEnd` 前面**（1.1.0 实战踩到）：顺序必须是 `start → 内容 → end → reference`。写反了文件能打开、WPS 却不显示批注，排查时容易误判成"批注没写进去"。`verify(check_comments=True)` 已断言顺序。
 - **整段替换只清直系 run，既有修订残留**（1.2.0 缺陷，1.2.1 修复）：目标段自带修订史时（真实公文常态），旧版 `replace_paragraph` 的 `findall(qn("w:r"))` 只匹配**直系** run，`w:ins`/`w:del` 包裹的 run 不在其中——替换后旧修订文字原样留在段里。对策：1.2.1 起 `_clear_paragraph_content` 按内容性标签清单清除（含修订包裹、超链接/域、批注锚点）；手写同类逻辑时务必按标签清单清，不要只删 `w:r`。
+- **拆分 run 丢制表符/换行**（1.2.2 缺陷，1.2.3 修复）：旧版 `split_run_at` 重建两侧文本时把 `w:tab`/`w:br`/`w:cr` 直接丢弃——含制表符/换行的 run 拆分后这些内容消失。1.2.3 起按子元素逐个归属拆分（计长口径与 `run.text` 一致：tab/br/cr 各计 1），跨界的 `w:t` 两侧各留一半。
+- **批注 id 固定 1 起号，自带批注文档必撞号**（1.2.2 及更早的缺陷，1.2.3 修复）：旧版 `add_comment` 只看本次会话待写批注。1.2.3 起起号取**文档既有批注 id 最大值＋1**（扫描正文锚点三方与已有 `comments.xml` 部件），与修订 id 的 `max(10000, 既有最大值)` 口径同构。
 
 ## 保存后必做校验
 

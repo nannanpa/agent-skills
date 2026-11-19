@@ -241,16 +241,31 @@ def apply_opinions(doc, config, apply_del_fn=None):
     op 取值：replace_para / insert_after / heading_after / correct。
     correct 需要 apply_track_changes.apply_del，可经 apply_del_fn 注入；
     未注入时跳过 correct 并在返回里标注（不静默）。
+
+    **同段冲突检测（1.2.3）**：先做过 correct（勘误留痕）的段落再执行
+    replace_para，会**吞掉该段全部修订留痕**（整段替换是清场语义）——
+    这类组合不执行，标注 `skipped:conflict:...` 并给出处置建议；其余
+    组合（replace→replace、replace→correct）不拦。需要覆盖时把两条
+    意见合成一条 replace_para，或先删掉那条 correct。
     """
     results = []
+    seg_ops = {}                # p_idx → 已执行的内容型操作（correct / replace_para）
     for item in config.get("opinions", []):
         oid = item.get("id")
         op = item.get("op")
         pidx = int(item.get("p_idx", -1))
         try:
             if op == "replace_para":
+                prior = seg_ops.get(pidx)
+                if prior == "correct":
+                    results.append((oid, op,
+                                    f"skipped:conflict:p_idx{pidx}已做过勘误留痕，"
+                                    f"整段替换会吞掉该留痕——两条意见合成一条 replace_para，"
+                                    f"或删除该 correct 条目后重跑"))
+                    continue
                 replace_paragraph(doc, pidx, item["text"])
                 results.append((oid, op, "ok"))
+                seg_ops[pidx] = "replace_para"
             elif op == "insert_after":
                 insert_paragraph_after(doc, pidx, item["text"])
                 results.append((oid, op, "ok"))
@@ -265,6 +280,7 @@ def apply_opinions(doc, config, apply_del_fn=None):
                                  item.get("date"), pidx, item["phrase"],
                                  item.get("text", ""))
                     results.append((oid, op, "ok"))
+                    seg_ops[pidx] = "correct"
             else:
                 results.append((oid, op, f"skipped:unknown_op({op})"))
         except Exception as e:

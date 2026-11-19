@@ -18,6 +18,14 @@ G6 整段替换回归（1.2.1）：目标段自带既有 w:ins 修订时，repla
    （v1.2.0 评测点名、代码级实锤）。
 G7 merge_markup 命令行（1.2.2）：--replace/--opinions（含 correct 自动注入
    apply_del 并启用修订）实跑，退出码 0/1 分区实测。
+G8 批注 id 扫描（1.2.3）：文档预置既有批注锚点 id=7 时，新批注起号必须
+   避开（旧版固定 1 起号在自带批注史文档上必撞号，与修订撞号同源）。
+G9 拆分保留 tab/br（1.2.3）：split_run_at 拆分含 w:tab/w:br 的 run，
+   两侧内容零丢失（旧版直接丢弃）。
+G10 意见同段冲突检测（1.2.3）：先 correct 后 replace_para 同段组合不执行，
+   标 skipped:conflict，勘误留痕不被清场吞掉。
+G11 CLI 码位统一（1.2.3）：add_comment（缺 --phrase 退 1、成功退 0 且保存
+   后自动 verify）、export_markup（缺文件退 1、成功退 0）。
 跑通 = 全部断言通过。Windows WPS 首次使用前，另需人工完成 SKILL.md
 "适用环境与未验证声明"里的三步验收（打开/显示/接受拒绝修订）。
 """
@@ -427,6 +435,91 @@ def main():
     del_texts = [dt.text or "" for dt in b7.findall(".//" + qn("w:delText"))]
     assert "乙段" in "".join(del_texts), f"G7 勘误原句未入 w:delText: {del_texts}"
     print("G7 merge_markup CLI: replace/码位1/越界1/缺参/opinions(correct) 全过")
+
+    # ── G8（1.2.3 新增）：批注 id 扫描既有批注 ──────────────────────
+    src8n = os.path.join(tmpdir, "srcg8.docx")
+    d8 = docx.Document()
+    p8 = d8.add_paragraph("正文测试内容。")
+    for tag in ("w:commentRangeStart", "w:commentRangeEnd"):
+        e8 = OxmlElement(tag)
+        e8.set(qn("w:id"), "7")
+        p8._p.append(e8)
+    rr8 = OxmlElement("w:r")
+    ref8 = OxmlElement("w:commentReference")
+    ref8.set(qn("w:id"), "7")
+    rr8.append(ref8)
+    p8._p.append(rr8)
+    d8.save(src8n)
+    doc8n = docx.Document(src8n)
+    cid8 = add_comment(doc8n, 0, "正文", "第二条批注", "审校", "2026-11-19T00:00:00Z")
+    assert cid8 == 8, f"G8 批注 id 未避开既有 id=7: 实得 {cid8}"
+    print("G8 批注 id 扫描: 既有 id=7 → 新批注 id =", cid8)
+
+    # ── G9（1.2.3 新增）：拆分保留 tab/br ───────────────────────────
+    from apply_track_changes import split_run_at as _sra
+    d9s = docx.Document()
+    p9 = d9s.add_paragraph("甲\t乙\n丙")
+    assert p9.runs[0].text == "甲\t乙\n丙", "python-docx 未按预期生成 tab/br"
+    _sra(p9.runs[0], 2)          # 甲(1)+tab(1) → 前半"甲\t"，后半"乙\n丙"
+    texts9 = [r.text for r in p9.runs]
+    assert texts9[0] == "甲\t" and texts9[1] == "乙\n丙", f"G9 拆分错位: {texts9}"
+    assert len(p9._p.findall(".//" + qn("w:tab"))) == 1, "G9 w:tab 丢失"
+    assert len(p9._p.findall(".//" + qn("w:br"))) == 1, "G9 w:br 丢失"
+    # 跨界 w:t：拆在"乙"中间
+    d9t = docx.Document()
+    p9t = d9t.add_paragraph("甲\t乙丙")
+    _sra(p9t.runs[0], 2)         # 甲(1)+tab(1) → 跨界落在"乙丙"内部
+    t9t = [r.text for r in p9t.runs]
+    assert t9t[0] == "甲\t" and t9t[1] == "乙丙", f"G9 跨界拆分错: {t9t}"
+    assert len(p9t._p.findall(".//" + qn("w:tab"))) == 1, "G9 跨界 w:tab 丢失"
+    print("G9 拆分保留 tab/br:", texts9, "+", t9t, "| tab/br 零丢失")
+
+    # ── G10（1.2.3 新增）：意见同段冲突检测 ─────────────────────────
+    from merge_markup import apply_opinions as _ao
+    srcc = os.path.join(tmpdir, "srcg10.docx")
+    dc = docx.Document()
+    dc.add_paragraph("甲段含错别字。")
+    dc.save(srcc)
+    docc = docx.Document(srcc)
+    counter10 = [10000]
+    fn10 = (lambda d, c, a, dt, pi, ph, tx:
+            apply_del(d, counter10, a or "审校", dt or "2026-11-19T00:00:00Z",
+                      pi, ph, tx or ""))
+    cfg10 = {"opinions": [
+        {"id": 1, "op": "correct", "p_idx": 0, "phrase": "错别字", "text": "正确"},
+        {"id": 2, "op": "replace_para", "p_idx": 0, "text": "整段重写。"},
+    ]}
+    res10 = _ao(docc, cfg10, apply_del_fn=fn10)
+    st10 = {oid: status for oid, op, status in res10}
+    assert st10[1] == "ok", f"G10 correct 应成功: {st10}"
+    assert st10[2].startswith("skipped:conflict"), f"G10 冲突未拦: {st10}"
+    assert docc.paragraphs[0]._p.find(".//" + qn("w:del")) is not None, \
+        "G10 勘误留痕被清场吞掉"
+    print("G10 同段冲突检测:", res10[0][2], "|", res10[1][2][:40], "| 留痕保留")
+
+    # ── G11（1.2.3 新增）：CLI 码位统一 ─────────────────────────────
+    AC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "add_comment.py")
+    EM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "export_markup.py")
+    rc = subprocess.run([sys.executable, EM, os.path.join(tmpdir, "不存在.docx")],
+                        capture_output=True, text=True)
+    assert rc.returncode == 1, f"G11 export 缺文件应退 1: {rc.returncode}"
+    rc = subprocess.run([sys.executable, EM, srcg], capture_output=True, text=True)
+    assert rc.returncode == 0, f"G11 export 成功应退 0: {rc.returncode}"
+    rc = subprocess.run([sys.executable, AC, srcg, os.path.join(tmpdir, "outac.docx"),
+                         "0", "测试批注"], capture_output=True, text=True)
+    assert rc.returncode == 1, f"G11 add_comment 缺 --phrase 应退 1: {rc.returncode}"
+    rc = subprocess.run([sys.executable, AC, srcg, os.path.join(tmpdir, "outac.docx"),
+                         "0", "测试批注", "--phrase", "甲版本"],
+                        capture_output=True, text=True)
+    assert rc.returncode == 0, f"G11 add_comment 成功应退 0: {rc.stdout[-200:]}{rc.stderr[-200:]}"
+    assert "OK: 批注" in rc.stdout, "G11 add_comment 成功路径应含 verify 通过输出"
+    # --help 标准惯例：打印用法并退 0（1.2.3 补齐，四脚本一致）
+    for cli, name in ((AC, "add_comment"), (EM, "export_markup"), (MM, "merge_markup"),
+                      (os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "apply_track_changes.py"), "apply_track_changes")):
+        rc = subprocess.run([sys.executable, cli, "--help"], capture_output=True, text=True)
+        assert rc.returncode == 0, f"G11 {name} --help 应退 0: {rc.returncode}"
+    print("G11 CLI 码位统一: export 1/0, add_comment 1/0（含保存后自动 verify）, 四脚本 --help 退 0")
 
     print("SELF-TEST OK")
 

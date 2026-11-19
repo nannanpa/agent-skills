@@ -48,7 +48,7 @@ def _max_revision_id(doc):
 
 
 def open_for_revision(src, author="审校", date_iso="2026-07-23T09:00:00Z"):
-    """Open src, enable trackChanges + rsidRoot, return (doc, counter)."""
+    """Open src, enable trackChanges + rsidRoot, return (doc, counter, author, date_iso)."""
     doc = docx.Document(src)
     settings = doc.settings.element
 
@@ -223,29 +223,51 @@ def del_insert(run, off, length, text, counter, author, date_iso):
 
 
 def split_run_at(run, offset):
-    """Truncate run to text[:offset]; return a new sibling run with text[offset:]."""
+    """Truncate run to text[:offset]; return a new sibling run with text[offset:].
+
+    1.2.3 更正（v1.2.2 评测点名、代码级实锤）：旧版按纯文本重建两侧，把
+    `w:tab`/`w:br`/`w:cr` 直接丢弃——含制表符/换行的 run 拆分后这些内容
+    消失。现按子元素逐个归属：计长口径与 python-docx 的 run.text 一致
+    （w:t 按文本长度、w:tab/w:br/w:cr 各计 1）；跨界的 w:t 两侧各留一半；
+    其余内容元素整体跟随所属侧，一个都不丢。
+    """
     r_el = run._r
     full = run.text
     if offset >= len(full):
         return
-    prefix = full[:offset]
-    suffix = full[offset:]
-    new_r = OxmlElement("w:r")
     rpr = r_el.find(qn("w:rPr"))
+    new_r = OxmlElement("w:r")
     if rpr is not None:
         new_r.append(copy.deepcopy(rpr))
-    t = OxmlElement("w:t")
-    t.set(qn("xml:space"), "preserve")
-    t.text = suffix
-    new_r.append(t)
-    r_el.addnext(new_r)
+    pos = 0
     for child in list(r_el):
-        if child.tag in (qn("w:t"), qn("w:tab"), qn("w:br"), qn("w:cr")):
-            r_el.remove(child)
-    t2 = OxmlElement("w:t")
-    t2.set(qn("xml:space"), "preserve")
-    t2.text = prefix
-    r_el.append(t2)
+        if child.tag == qn("w:rPr"):
+            continue
+        if child.tag == qn("w:t"):
+            txt = child.text or ""
+            length = len(txt)
+        elif child.tag in (qn("w:tab"), qn("w:br"), qn("w:cr")):
+            length = 1
+        else:
+            length = 0        # 非文本内容元素（fldChar/instrText 等）不计长，随所属侧走
+        if pos + length <= offset:
+            pos += length     # 整体归前半：留在原 run
+        elif pos >= offset:
+            r_el.remove(child)  # 整体归后半：搬到新 run
+            new_r.append(child)
+            pos += length
+        else:
+            # 跨界：只可能是 L>1 的 w:t（tab/br/cr 原子长 1，不会跨）
+            cut = offset - pos
+            pre = OxmlElement("w:t")
+            pre.set(qn("xml:space"), "preserve")
+            pre.text = txt[:cut]
+            child.set(qn("xml:space"), "preserve")
+            child.text = txt[cut:]
+            r_el.replace(child, pre)   # 前半留在原 run
+            new_r.append(child)        # 后半搬到新 run
+            pos = offset
+    r_el.addnext(new_r)
 
 
 def apply(doc, counter, author, date_iso, p_idx, phrase, text):
@@ -429,6 +451,11 @@ def _die(msg, hint, code=1):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+
+    # 标准 CLI 惯例：--help/-h 打印用法并成功退出（1.2.3 补齐）
+    if "-h" in args or "--help" in args:
+        print(__doc__)
+        sys.exit(0)
 
     def _take(flag):
         """取出 `flag 其值` 对并从位置参数里删掉；返回 None 表示未给。"""

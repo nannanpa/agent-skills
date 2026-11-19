@@ -82,6 +82,33 @@ def _pending(doc):
     return lst
 
 
+def _existing_comment_ids(doc):
+    """扫描文档里**已存在**的批注 id（正文锚点三方 + 已有 comments.xml 部件）。
+
+    1.2.3 更正（v1.2.2 评测点名实锤）：旧版只看本次会话的待写批注、固定 1
+    起号——文档自带批注史时（真实公文常态：其他工具或人工加过批注）必然
+    撞号，Word/WPS 批注显示错乱甚至拒开（与修订 w:id 撞号同源）。
+    """
+    ids = set()
+    for tag in ("w:commentRangeStart", "w:commentRangeEnd", "w:commentReference"):
+        for el in doc.element.body.iter(qn(tag)):
+            v = el.get(qn("w:id"))
+            if v and v.lstrip("-").isdigit():
+                ids.add(abs(int(v)))
+    try:
+        for part in doc.part.package.parts:
+            if str(part.partname) == "/word/comments.xml":
+                croot = etree.fromstring(part.blob)
+                for c in croot.findall("{%s}comment" % W_NS):
+                    v = c.get("{%s}id" % W_NS)
+                    if v and v.lstrip("-").isdigit():
+                        ids.add(abs(int(v)))
+                break
+    except Exception:
+        pass                    # comments.xml 读取失败不阻断——正文锚点扫描已覆盖
+    return ids
+
+
 def _run_text_all(r_el):
     """run 内的全部文本——`w:t` 与 `w:delText` 都算（被删文字在 delText 里）。"""
     out = []
@@ -140,9 +167,10 @@ def add_comment(doc, p_idx, phrase, text, author="审校",
             split_run_at(Run(target_el, p), len(phrase))
         anchor_el = target_el
 
-    # 批注 id
+    # 批注 id：扫描文档既有批注（锚点三方 + comments.xml 部件）与本次待写，
+    # 起号取最大值 +1——固定 1 起号在自带批注史的稿件上必然撞号（1.2.3 修）
     lst = _pending(doc)
-    cid = max([c[0] for c in lst], default=0) + 1
+    cid = max(_existing_comment_ids(doc) | {c[0] for c in lst}, default=0) + 1
 
     # anchor_phrase：批注锚到另一处（通常是"被删掉的那段字"）
     if anchor_phrase:
@@ -247,14 +275,27 @@ def save_with_comments(doc, path):
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────
-def _die(msg, hint):
+def _die(msg, hint, code=1):
+    """报错退出。退出码分区（1.2.3 起，与 apply_track_changes.py 同口径）：
+
+    0 = 成功（保存后已自动跑 verify(check_comments=True)）
+    1 = 用法/输入/环境错误（缺参、文件不存在、段号越界、锚点未找到）
+    2 = 产物结构校验未通过（verify 断言失败——锚点/登记结构有问题，
+        产物不可信，先跑 self_test.py 再对照 SKILL.md「批注」节排查）
+    """
     print(f"❌ {msg}")
     print(f"💡 怎么办：{hint}")
-    sys.exit(1)
+    print(f"（退出码 {code}：0 成功｜1 输入/用法错｜2 结构校验未通过）")
+    sys.exit(code)
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+
+    # 标准 CLI 惯例：--help/-h 打印用法并成功退出（1.2.3 补齐）
+    if "-h" in args or "--help" in args:
+        print(__doc__)
+        sys.exit(0)
 
     def _take(flag):
         """取出 `flag 其值` 对并从位置参数里删掉；返回 None 表示未给。"""
@@ -288,9 +329,20 @@ if __name__ == "__main__":
         n = save_with_comments(doc, out)
         print(f"完成: {out}  批注 {n} 条（id={cid}）")
     except FileNotFoundError:
-        _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。")
+        _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。", code=1)
     except IndexError:
-        _die(f"段落号越界：{p_idx}", "用 python-docx 数一下段落序号（从 0 起）。")
+        _die(f"段落号越界：{p_idx}", "用 python-docx 数一下段落序号（从 0 起）。", code=1)
     except ValueError as e:
         _die(f"添加批注失败：{e}",
-             "锚点短语必须与正文逐字一致；先打印该段落的 run 列表确认精确字符。")
+             "锚点短语必须与正文逐字一致；先打印该段落的 run 列表确认精确字符。", code=1)
+    # 保存后主动跑完整批注校验（1.2.3：不再"存完即算成功"）
+    try:
+        from apply_track_changes import verify
+        verify(out, check_comments=True)
+    except AssertionError as e:
+        _die(f"结构校验未通过：{e}",
+             "批注锚点/部件登记结构有问题，产物不可信；先跑 self_test.py 确认环境，"
+             "再对照 SKILL.md「批注」节逐项排查。", code=2)
+    except Exception as e:
+        _die(f"校验执行失败：{type(e).__name__}: {e}",
+             "verify 自身异常罕见；保留产物与原件，到 SKILL.md「已知坑」对照排查。", code=2)

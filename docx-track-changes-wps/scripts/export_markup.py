@@ -121,23 +121,40 @@ def to_markdown(data, src_name):
     return "\n".join(out)
 
 
+def _die(msg, hint, code=1):
+    """报错退出。退出码分区（1.2.3 起，与 apply_track_changes.py 同口径）：
+
+    本脚本是**只读导出**，无产物写入，不使用码位 2——0 = 成功（含"该文件
+    没有修订/批注"的正常空清单）；1 = 用法/输入错误（缺参、缺值、文件
+    不存在、不是有效 .docx、XML 解析失败）。
+    """
+    print(f"❌ {msg}")
+    print(f"💡 怎么办：{hint}")
+    print(f"（退出码 {code}：0 成功｜1 输入/用法错｜2 本脚本不用（只读无产物））")
+    sys.exit(code)
+
+
 def main():
+    # 标准 CLI 惯例：--help/-h 打印用法并成功退出（1.2.3 补齐）
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
+        print(__doc__)
+        return
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if not args:
-        print("❌ 参数不足")
-        print("💡 怎么办：用法：python3 export_markup.py 文件.docx [-o 输出.md] [--json]")
-        sys.exit(1)
+        _die("参数不足", "用法：python3 export_markup.py 文件.docx [-o 输出.md] [--json]")
     path = args[0]
     if not os.path.exists(path):
-        print(f"❌ 找不到文件：{path}")
-        print("💡 怎么办：检查路径拼写；含空格的路径用引号包住。")
-        sys.exit(1)
+        _die(f"找不到文件：{path}", "检查路径拼写；含空格的路径用引号包住。")
+    if "-o" in sys.argv:
+        i = sys.argv.index("-o")
+        if i + 1 >= len(sys.argv) or sys.argv[i + 1].startswith("-"):
+            _die("-o 缺少输出路径", "用法：python3 export_markup.py 文件.docx -o 清单.md")
     try:
         data = export(path)
     except zipfile.BadZipFile:
-        print(f"❌ {path} 不是有效的 .docx")
-        print("💡 怎么办：扩展名是 .docx 不代表内容是 OOXML；先用 WPS 另存为真正的 .docx。")
-        sys.exit(1)
+        _die(f"{path} 不是有效的 .docx", "扩展名是 .docx 不代表内容是 OOXML；先用 WPS 另存为真正的 .docx。")
+    except KeyError as e:
+        _die(f"{path} 缺少必要部件：{e}", "文件可能被裁剪过；先用 WPS 打开另存为完整 .docx。")
     if "--json" in sys.argv:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return
