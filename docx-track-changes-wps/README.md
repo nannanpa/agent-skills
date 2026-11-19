@@ -21,7 +21,7 @@ WPS 对修订 XML 极其敏感，手写的 `w:ins`/`w:del` 很容易触发"彩�
 Python 3.8+ 与 python-docx、lxml：
 
 ```bash
-pip install python-docx lxml
+pip install -r requirements.txt   # 1.2.1 起提供依赖清单（python-docx / lxml 最低版本）
 ```
 
 安装与运行均在本地完成，无需网络。
@@ -31,6 +31,7 @@ pip install python-docx lxml
 把整个文件夹复制到你的 agent skills 目录（如 `~/.workbuddy/skills/`），脚本在 `scripts/apply_track_changes.py`。
 
 ## 发布记录
+- **2026-11-19 v1.2.1（评测驱动修补）**：v1.2.0 评测（4.79）点名缺陷逐项对账修补。①**修真缺陷**——`merge_markup.replace_paragraph()` 整段替换只清直系 `w:r`，段内既有 `w:ins`/`w:del` 修订文字残留（评测点名、代码级实锤）；现按内容性标签清单清除（修订包裹、超链接/域/smartTag、批注锚点三件），只留 pPr 与书签，字体继承改为深查找（修订内 run 也能取到 rPr），新增自检场景 G6 断言"替换后段内零修订残留"；②SKILL.md 加显式目录；③CLI 退出码分区写死文档（0 成功｜1 输入/用法错｜2 结构校验未通过），`verify()` 断言失败改退 2；④补 `requirements.txt`；⑤两处表述改实——"整段替换"补清场语义与留痕须知、"保存后校验"如实说明 settings 校验为关键位置断言而非全量 schema 顺序校验；⑥既有批注/超链接段落处理指引集中进 FAQ。
 - **2026-11-19 v1.2.0（马斌侧整合，Windows/WPS 实测通过）**：新增 `merge_markup.py`——合并多稿底纹着色标注（`w:shd` 三色区分来源）、整合说明图例页、按意见编号配置批量改稿、整段替换、段落/标题级插入、两稿按段对齐清单；底纹与修订标记、批注并列为三套并行机制（分别回答"来自谁／改了什么／为什么改"）。作者署名加和欣月（贡献原料，提炼自其端真实任务并经脱敏回传）。Windows 终端中文编码坑（`-X utf8` + `\uXXXX`）入「已知坑」。新增自检场景 G；v1.1.1 原版六场景自检基线全绿。**Windows/WPS 实测已回传并通过**：self_test 场景 G 全绿（EXIT=0），三色底纹经 WPS 官方引擎转 PDF 后从渲染结果提取填充色 `#CCE5FF×5／#CCFFCC×5／#FFFF99×4`、三色独立不串色；三步验收的第③步"接受/拒绝修订"因本机无 GUI、COM 被拦未做，标"需人工确认"，依据链路未改＋1.1.1 已验＋引擎解析通过不阻断发布。
 - **2026-10-31 v1.1.1（GitHub，SkillHub 同号）**：口径修补＋CLI 做实——更正「未验证声明」中“全程不用 `w:del`”的旧表述（纯插入场景不用，勘误场景见「勘误与替换」节）；脚本注释里的遗留版本号改为不绑定具体版本（随 SKILL.md 头部），不再逐版改注释；README 新增「环境」段（依赖安装说明）；批注 CLI 新增 `--phrase`（必填挂载锚点）与 `--anchor`（另锚）双参数，不再缺省静默取首 run；**修订主脚本 CLI 支持真插入**——`--p-idx N --phrase 短语 --text 新文` 走 `apply()` 实际写入 w:ins（`--del` 走 `apply_del()` 勘误），不给操作参数时明示“仅保存并校验，未修改正文”
 - **2026-10-30 v1.1.0（GitHub，SkillHub 同号）**：三项合并发布。①**实战勘误扩展**——新增 `apply_del()`（按锚点短语删旧换新）、`del_insert()`（run 内字符区间删除并可插入替换）、`split_insert()`（段内字符偏移插入），以 10-27 真实公文修订脚本为基础整理入技能；`make_del()` 自动将 `w:t` 转为 `w:delText`；`verify()` 的 `w:ins`/`w:del` **合查** id 唯一性、断言 `w:del` 内不得残留 `w:t`、新增 `expect_ins`/`expect_del` 数量断言。②**格式继承**——修一个实战暴露的观感缺陷：插入的文字不继承当前格式（根因：`make_ins()` 造的 `<w:r>` 不带 `w:rPr`，而公文正文普遍用直接格式，插入内容掉回文档默认字体，与人工在 Word 里输入的观感不符）。新增 `_rpr_for()`（run 自身 → 段落标记 → 段落样式三级取值），`apply()`/`split_insert()`/`del_insert()` 分别继承锚点 run、被拆 run、**被替换文字**的格式；继承时剔除 `w:rPrChange`；**更正「彩虹圈规避清单」第 5 条**（原写"插入的 `w:r` 不带 `w:rPr`"，把格式不继承固化成了规范，现更正为"不得凭空造 rPr，但必须继承锚点已有的 rPr"）。③**批注**——补齐人工审校的另一半：修订标记说"改了"，批注说"为什么改"。新增 `add_comment.py`（批注要动四个部件：`word/comments.xml`、`[Content_Types].xml`、`document.xml.rels`、`document.xml` 锚点；python-docx 无内置 comments part，故用保存后 zip 后处理；锚点**穿透 `w:ins`/`w:del`**，"给某处删除写批注"时批注范围包住整个修订标记）与 `export_markup.py`（导出修订标记表＋批注表为 Markdown，即"修改意见报送"要交的那份清单）。`verify()` 新增 `check_fmt`/`check_comments` 两项断言；`self_test.py` 增至六场景。**实测**：35 段真实公文上 `w:ins=3 / w:del=2 / 批注 3` 全绿；格式继承 A/B 对照（修复前插入 run 无 rPr → 修复后 `fonts=仿宋_GB2312 / sz=32`，与同段正文完全一致）

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""合并多稿 / 按意见逐处改稿的结构化编辑脚本（docx-track-changes-wps 1.2.0 配套）。
+"""合并多稿 / 按意见逐处改稿的结构化编辑脚本（docx-track-changes-wps 1.2.1 配套）。
 
 与 apply_track_changes.py 的关系：**并行机制，不互相替代**。
   · apply_track_changes.py —— 写入真正的"修订模式"（w:ins / w:del），记录"改了什么"；
@@ -15,7 +15,8 @@
   · shade_run(run, fill)                 给 run 加 w:shd 底纹（底纹着色）；
   · shaded_run(paragraph, text, ...)     造一个带底纹的 run（按来源分色）；
   · add_legend_page(doc, items, ...)     生成"整合版本 · 标注说明"图例页；
-  · replace_paragraph(doc, p_idx, ...)   整段正文替换（保留 pPr 与字体）；
+  · replace_paragraph(doc, p_idx, ...)   整段正文替换（保留 pPr 与字体，
+                                         连同段内既有修订/批注锚点一并清除）；
   · insert_paragraph_after(doc, p_idx, ...) / insert_heading_after(...)  段落/标题级插入；
   · apply_opinions(doc, config, ...)     按"意见编号→改动"配置逐处编排落地；
   · merge_by_paragraph(base, incoming)   按段比对拼整合正文（返回结构化清单，
@@ -126,24 +127,59 @@ def _clone_ppr(src_p, dst_p):
 
 
 def _rpr_of_first_run(p):
-    """取段落首个 run 的 rPr 副本；无则 None。"""
-    for r in p._p.findall(qn("w:r")):
+    """取段落首个 run 的 rPr 副本；无则 None。
+
+    1.2.1 更正：改为 `iter()` 深查找——段落首个内容 run 可能包在 `w:ins`/
+    `w:del` 里（自带修订史的稿件常态），旧版 `findall()` 只看直系子节点
+    会漏掉它，导致整段替换时字体继承落空。
+    """
+    for r in p._p.iter(qn("w:r")):
         rpr = r.find(qn("w:rPr"))
         if rpr is not None:
             return copy.deepcopy(rpr)
     return None
 
 
+# 整段替换时要清除的"内容性"子元素（1.2.1）：
+#   w:r 直系 run；w:ins / w:del 修订包裹（内部 run 随包清除）；
+#   w:hyperlink / w:fldSimple / w:smartTag 内部同样藏 run；
+#   批注锚点三件（RangeStart / RangeEnd / Reference）——文本没了锚点必须
+#   跟着走，残留空锚点会让 Word/WPS 显示空批注甚至结构异常。
+#   保留：w:pPr（段落格式）、w:bookmarkStart / w:bookmarkEnd（书签，交叉引用用）。
+_CLEAR_TAGS = ("w:r", "w:ins", "w:del", "w:hyperlink", "w:fldSimple",
+               "w:smartTag", "w:commentRangeStart", "w:commentRangeEnd",
+               "w:commentReference")
+
+
+def _clear_paragraph_content(p):
+    """清空段落的全部内容性子元素（见 _CLEAR_TAGS），返回清除个数。"""
+    tags = {qn(t) for t in _CLEAR_TAGS}
+    removed = 0
+    for el in list(p._p):
+        if el.tag in tags:
+            p._p.remove(el)
+            removed += 1
+    return removed
+
+
 def replace_paragraph(doc, p_idx, new_text, inherit_font=True):
-    """整段正文替换：清空目标段的 run，写入新文本，保留 pPr 与原字体。
+    """整段正文替换：清空目标段**全部内容**后写入新文本，保留 pPr 与字体。
 
     与 apply_del 的区别：这里不做修订标记、不保留旧字，是直接改写整段
     （适用于"按意见重写整段"而非"勘误"）。返回被改的 Paragraph。
+
+    **1.2.1 更正（v1.2.0 评测点名、代码级实锤）**：旧版只清直系 `w:r`，
+    段内既有的 `w:ins`/`w:del` 包裹 run 会原样残留——"整段替换"后旧修订
+    文字仍在段里。现按"整段"语义清除全部内容性子元素（含修订包裹、
+    超链接/域、批注锚点，见 `_CLEAR_TAGS`），只留 pPr 与书签。
+
+    **语义须知**：既有修订与批注引用随替换**一并消失**（本接口设计为
+    不留痕）。要留痕的改字用 `apply_del`；替换前建议先跑
+    `export_markup` 导出修订批注清单留档，再执行本接口。
     """
     p = doc.paragraphs[p_idx]
     rpr = _rpr_of_first_run(p) if inherit_font else None
-    for r in list(p._p.findall(qn("w:r"))):
-        p._p.remove(r)
+    _clear_paragraph_content(p)
     r = p.add_run(new_text)
     if rpr is not None:
         r._r.insert(0, rpr)

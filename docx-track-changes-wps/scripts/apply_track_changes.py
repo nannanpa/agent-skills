@@ -412,10 +412,19 @@ def verify(path, expect_ins=None, expect_del=None, check_fmt=False,
     return len(ins), len(dels)
 
 
-def _die(msg, hint):
+def _die(msg, hint, code=1):
+    """报错退出。退出码分区（1.2.1 起，程序化调用可按码分流）：
+
+    0 = 成功（含"仅保存并校验，未修改正文"）
+    1 = 用法/输入/环境错误（参数不齐、--p-idx 非整数、文件不存在、
+        不是有效 .docx、锚点短语未命中、其他处理失败）
+    2 = 产物结构校验未通过（verify() 断言失败——输入文件结构有问题的
+        信号，产物不可信，先跑 self_test.py 再对照彩虹圈规避清单排查）
+    """
     print(f"❌ {msg}")
     print(f"💡 怎么办：{hint}")
-    sys.exit(1)
+    print(f"（退出码 {code}：0 成功｜1 输入/用法错｜2 结构校验未通过）")
+    sys.exit(code)
 
 
 if __name__ == "__main__":
@@ -457,7 +466,7 @@ if __name__ == "__main__":
         insert_op = (p_idx, phrase, text, del_mode)
 
     if len(args) < 2:
-        _die("参数不足", "用法：python3 apply_track_changes.py 原件.docx 输出.docx [作者] [日期ISO] [--p-idx N --phrase 短语 --text 新文 | --del]。前两个路径必填，含空格用引号包住。")
+        _die("参数不足", "用法：python3 apply_track_changes.py 原件.docx 输出.docx [作者] [日期ISO] [--p-idx N --phrase 短语 --text 新文 | --del]。前两个路径必填，含空格用引号包住。退出码：0 成功｜1 输入/用法错｜2 结构校验未通过。", code=1)
     src, out = args[0], args[1]
     author = args[2] if len(args) > 2 else "审校"
     date_iso = args[3] if len(args) > 3 else "2026-07-23T09:00:00Z"
@@ -478,9 +487,9 @@ if __name__ == "__main__":
     except FileNotFoundError:
         _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。")
     except AssertionError as e:
-        _die(f"结构校验未通过：{e}", "先跑 self_test.py 确认环境正常；再对照 SKILL.md「彩虹圈规避清单」逐条排查。原件先用副本，别在原件上重试。")
+        _die(f"结构校验未通过：{e}", "先跑 self_test.py 确认环境正常；再对照 SKILL.md「彩虹圈规避清单」逐条排查。原件先用副本，别在原件上重试。", code=2)
     except Exception as e:
         m = str(e)
         if "Content_Types" in m or "no such file" in m.lower():
-            _die(f"{src} 不是有效的 .docx 文件", "确认扩展名是 .docx 而不是 .doc/.rtf/.wps；必要时先用 WPS 另存为 .docx。")
-        _die(f"处理失败：{m}", "先用 self_test.py 验证环境；仍失败时保留原件并到 SKILL.md「已知坑」对照排查。")
+            _die(f"{src} 不是有效的 .docx 文件", "确认扩展名是 .docx 而不是 .doc/.rtf/.wps；必要时先用 WPS 另存为 .docx。", code=1)
+        _die(f"处理失败：{m}", "先用 self_test.py 验证环境；仍失败时保留原件并到 SKILL.md「已知坑」对照排查。", code=1)

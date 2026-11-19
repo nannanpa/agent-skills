@@ -1,6 +1,6 @@
 ---
 name: docx-track-changes-wps
-version: "1.2.0"
+version: "1.2.1"
 description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment），并合并多稿逐处标注来源、按外部意见清单批量改稿时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承、批注写入、导出修订批注清单、底纹着色标注多稿来源、整合说明图例页、按意见编号批量编排改稿、整段替换与段落/标题插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、批注、修改意见清单、合并多稿、多稿整合、三色标注、底纹标注、逐处标注来源、按意见改稿、整段替换。
 author: 马斌（nannanpa）
 contributors:
@@ -19,6 +19,23 @@ tags:
 # docx-track-changes-wps
 
 用 python-docx 加 `lxml` 直接操作 XML，向 Word `.docx` 写入真正的"WPS 安全"修订（tracked changes）。专为**中文公文场景**设计：修改意见报送（如报送规划、要点类文件的修改意见）、在发文稿上以"修订模式"标注修改/新增。
+
+## 目录
+
+1. [适用场景](#适用场景)
+2. [黄金法则：能用插入就不用删除；确需勘误就用规范的 w:del](#黄金法则能用插入就不用删除确需勘误就用规范的-wdel)
+3. [WPS 彩虹圈规避清单（必查）](#wps-彩虹圈规避清单必查)
+4. [勘误与替换（w:del + w:ins）](#勘误与替换wdel--wins11-新增)
+5. [格式继承](#格式继承11-新增)
+6. [批注（w:comment）与导出清单](#批注wcomment11-新增)
+7. [合并多稿：底纹标注来源与图例页](#合并多稿底纹标注来源与图例页12-新增)
+8. [按意见清单逐处改稿](#按意见清单逐处改稿12-新增)
+9. [适用环境与未验证声明（诚实边界）](#适用环境与未验证声明诚实边界)
+10. [操作步骤与命令行](#操作步骤)
+11. [已知坑](#已知坑)
+12. [保存后必做校验](#保存后必做校验)
+13. [样例：一次插入前后的 XML](#样例一次插入前后的-xml真实产物)
+14. [常见问题（FAQ）](#常见问题faq)
 
 ## 适用场景
 
@@ -220,7 +237,7 @@ add_legend_page(doc)   # 文末追加"整合版本 · 标注说明"图例页
 
 | 接口 | 用途 |
 |---|---|
-| `replace_paragraph(doc, p_idx, text)` | 整段正文替换（保留 pPr 与原字体，不做修订标记） |
+| `replace_paragraph(doc, p_idx, text)` | 整段正文替换（保留 pPr 与字体，不做修订标记；**连同段内既有修订包裹/批注锚点一并清除**，1.2.1 更正） |
 | `insert_paragraph_after(doc, p_idx, text)` | 指定段后插入新段落 |
 | `insert_heading_after(doc, p_idx, text)` | 指定段后插入黑体标题（新增章节用） |
 | `apply_opinions(doc, config)` | 按"意见编号→改动"配置批量编排 |
@@ -236,7 +253,12 @@ config = {"opinions": [
 results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"), …]
 ```
 
-**边界**：`apply_opinions` 对每条改动返回 `ok`／`skipped`／`error`，**不静默吞错**；`correct`（勘误）类需显式注入 `apply_track_changes.apply_del`，未注入则标 `skipped:no_apply_del`。整段替换是**直接改写**（不留旧字），与"勘误留痕"的 `apply_del` 用途不同——按意见重写整段用前者，改错字用后者，别混。
+**边界**：`apply_opinions` 对每条改动返回 `ok`／`skipped`／`error`，**不静默吞错**；`correct`（勘误）类需显式注入 `apply_track_changes.apply_del`，未注入则标 `skipped:no_apply_del`。整段替换是**直接改写**（不留旧字、不留痕），与"勘误留痕"的 `apply_del` 用途不同——按意见重写整段用前者，改错字用后者，别混。
+
+**整段替换的两条硬规矩（1.2.1）**：
+
+1. `replace_paragraph` 清的是**全部内容**：直系 run、既有 `w:ins`/`w:del` 修订包裹、超链接/域（内部藏 run）、批注锚点三件，全部随替换消失——只保留段落格式（pPr）与书签。1.2.0 及更早版本只清直系 run，**段内既有修订文字会残留**（v1.2.0 评测点名、代码级实锤），已在本版修复。
+2. 替换会**吞掉段内既有修订史与批注引用**（本接口设计为不留痕）。要留痕的改字用 `apply_del`；对带修订史的稿件执行整段替换前，先跑 `export_markup` 导出清单留档，再替换。
 
 ## 适用环境与未验证声明（诚实边界）
 
@@ -267,6 +289,16 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 
 不给操作参数时只保存并校验（stdout 明示"未修改正文"）；参数不齐退 1。
 
+**命令行退出码分区**（1.2.1 起，程序化调用可按码分流）：
+
+| 退出码 | 含义 | 典型场景 |
+|---|---|---|
+| 0 | 成功 | 插入/勘误完成并校验通过；或"仅保存并校验，未修改正文" |
+| 1 | 用法/输入/环境错误 | 参数不齐、`--p-idx` 非整数、文件不存在、不是有效 .docx、锚点短语未命中、其他处理失败 |
+| 2 | 产物结构校验未通过 | `verify()` 断言失败——输入文件结构有问题的信号，产物不可信，先跑 `self_test.py` 再对照「彩虹圈规避清单」排查 |
+
+（Python 库接口不走退出码，保持抛异常——由调用方 `try/except` 捕获后自行决定处置。）
+
 ## 已知坑
 
 - **锚点短语里藏隐藏字符。** 中文文档常在看似纯文本的地方嵌着 `》（U+300B）`、`「（U+300C）`、`—（U+2014）` 等（如 `《…（2025—2027年）》` 实际以 `年）》。` 结尾）。直接写锚点 `"年），"` 会匹配失败，因为中间藏着 `》`。**构造复杂锚点时用显式 Unicode 转义**（`"年"+"\uFF09"+"\u300B"+"\uFF0C"`），并且/或者先打印候选 run 的 `repr()` 确认精确字符再匹配。
@@ -279,12 +311,13 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 - **Windows 终端中文乱码：脚本里的中文写成 `\uXXXX` 转义，运行时加 `-X utf8`**（1.2.0 新增，来自她端 Windows 实测）：在 Windows 终端直接跑含中文的 python-docx 脚本会编码报错。把脚本中所有中文字符串写成 `\uXXXX` 转义形式，运行时用 `python -X utf8 script.py`，可绕开终端默认编码问题。本技能脚本用直接中文（macOS 环境正常），**在 Windows 上若报编码错，按此法改写后再跑**；此为环境适配，不是修订机制的缺陷。
 - **批注找不到锚点，多半是锚点在修订标记里**（1.1.0 实战踩到）：`paragraph.runs` 只返回段落的**直系** `w:r`，`w:ins`/`w:del` 里的 run 它看不到。而"给某处删除写批注"是最常见用法——必然落在 `w:del` 里。对策：`add_comment()` 直接在段落 XML 树上找（穿透 `w:ins`/`w:del`），并自动把批注范围包住整个修订标记；手写锚点时同理。
 - **`commentReference` 排在了 `commentRangeEnd` 前面**（1.1.0 实战踩到）：顺序必须是 `start → 内容 → end → reference`。写反了文件能打开、WPS 却不显示批注，排查时容易误判成"批注没写进去"。`verify(check_comments=True)` 已断言顺序。
+- **整段替换只清直系 run，既有修订残留**（1.2.0 缺陷，1.2.1 修复）：目标段自带修订史时（真实公文常态），旧版 `replace_paragraph` 的 `findall(qn("w:r"))` 只匹配**直系** run，`w:ins`/`w:del` 包裹的 run 不在其中——替换后旧修订文字原样留在段里。对策：1.2.1 起 `_clear_paragraph_content` 按内容性标签清单清除（含修订包裹、超链接/域、批注锚点）；手写同类逻辑时务必按标签清单清，不要只删 `w:r`。
 
 ## 保存后必做校验
 
 - `zipfile.ZipFile(path).testzip()` 返回 `None`（压缩包完好）；
 - `etree.fromstring(z.read('word/document.xml'))` 可解析（XML 合法）；
-- `trackChanges` 为 `true`；`rsidRoot` 存在**且位于 `w:rsids` 内**（不得是 `w:settings` 的直接子元素）；settings 子元素顺序符合 schema（`verify()` 已内置断言）；
+- `trackChanges` 为 `true`；`rsidRoot` 存在**且位于 `w:rsids` 内**（不得是 `w:settings` 的直接子元素）。settings 的元素顺序靠**构造时锚定**保证：`ensure_child` 按 CT_Settings schema 顺序选插入位置（`trackChanges` 在 `defaultTabStop` 前、`rsids` 在 `mathPr`/`themeFontLang` 前）；`verify()` 断言的是关键位置（trackChanges 存在、rsidRoot 在 rsids 内且不在 settings 直下），**不是全量 schema 顺序校验**——手写 XML 改 settings 时请以「彩虹圈规避清单」第 4 条为准自查。
 - `w:ins` 数量符合预期；`w:del` 在**纯插入模式下应为 0**、在**勘误模式下应为预期数**（`verify(path, expect_ins=N, expect_del=M)` 可直接断言）；
 - **`w:ins` 与 `w:del` 合起来的 `w:id` 集合唯一**（1.1.0 起 `verify()` 已改为合查）——id 撞号是彩虹圈卡死首因；
 - 每个 `w:ins`/`w:del` 都有 author+date+内部 `w:r`；**`w:del` 内不得有 `w:t`，必须有 `w:delText`**；
@@ -334,6 +367,9 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 - **插入的字看着和正文不是一套字体**：见「格式继承」一节。用 1.1.0 以上的脚本（插入内容自动继承锚点 rPr）；若用的是旧版脚本或手写 XML，把锚点 run 的 `w:rPr` 复制进 `w:ins` 内的 `w:r`，并放在 `w:t` 之前。
 - **批注在 WPS 里看不见**：①确认 `commentReference` 排在 `commentRangeEnd` **之后**；②确认 `comments.xml` 已在 `[Content_Types].xml` 与 `word/_rels/document.xml.rels` 两处登记（缺任一个，Word 会打不开或静默丢弃批注）；③确认批注正文非空。跑 `verify(path, check_comments=True)` 一遍即可定位。
 - **要给"某处删除"配一句批注，锚点找不到**：锚点在 `w:del` 里，`paragraph.runs` 看不到它。用 `add_comment()`（自动穿透 `w:ins`/`w:del` 并把批注范围包住整个修订标记），或手写时把 `commentRangeStart`/`End` 放在 `w:del` 元素**前后**。
+- **整段替换后旧字还在／旧批注错位（1.2.1 修复的坑）**：1.2.0 及更早版本的 `replace_paragraph` 只清直系 run，段内既有 `w:ins`/`w:del` 修订文字会残留，批注锚点也会错位。升级到 1.2.1 以上（连修订包裹、超链接/域、批注锚点一并清）；老版本产物请对照本文「按意见清单逐处改稿」的硬规矩逐段检查。
+- **目标段带超链接、域代码或既有批注，能整段替换吗**：能，但这些都是"内容"，会随替换**一并消失**（含批注引用）。段里的批注意见若还要留，先跑 `export_markup` 导出清单，替换后按需重挂。
+- **命令行退出码怎么读**：0 成功｜1 输入/用法错（参数、文件、锚点未命中）｜2 结构校验未通过（产物不可信）。程序化调用按码分流；库接口（import 方式）不设退出码，直接抛异常由调用方捕获。
 
 现成的 WPS 安全实现见 `scripts/apply_track_changes.py`，提供 `apply(paragraph_index, anchor_phrase, insert_text)` 辅助函数。
 

@@ -13,6 +13,9 @@ E. 格式继承（1.1.0）：插入内容必须带锚点 run 的 w:rPr，否则�
 F. 批注（1.1.0）与导出清单。
 G. 合并多稿（1.2.0）：w:shd 三色底纹、图例页、整段替换、段落/标题插入、
    按意见清单批量编排（逐条返回状态不静默）、两稿按段对齐。
+G6 整段替换回归（1.2.1）：目标段自带既有 w:ins 修订时，replace_paragraph
+   必须连修订包裹一并清掉——1.2.0 只清直系 w:r 致旧修订文字残留
+   （v1.2.0 评测点名、代码级实锤）。
 跑通 = 全部断言通过。Windows WPS 首次使用前，另需人工完成 SKILL.md
 "适用环境与未验证声明"里的三步验收（打开/显示/接受拒绝修订）。
 """
@@ -322,6 +325,60 @@ def main():
     aligned = merge_by_paragraph(["甲段", "相同"], ["乙段", "相同", "仅乙有"])
     assert [x["status"] for x in aligned] == ["differ", "both", "incoming_only"], \
         f"按段对齐错: {aligned}"
+
+    # ── G6（1.2.1 新增）：整段替换须清掉段内既有修订 ─────────────────
+    # 缺陷（v1.2.0 评测点名、代码级实锤）：旧版 replace_paragraph 只清直系
+    # w:r，段内既有 w:ins/w:del 包裹 run 原样残留——"整段替换"后旧修订
+    # 文字仍在段里。修复判据：替换后段内零修订标记、零旧文本、pPr 保留。
+    srci = os.path.join(tmpdir, "srci.docx")
+    outi = os.path.join(tmpdir, "outi.docx")
+    di = docx.Document()
+    di.add_paragraph("段落零，不动。")
+    pi = _styled_run(di, "既有正文")
+    pi.paragraph_format.first_line_indent = Pt(32)   # 造出 pPr，验证替换后保留
+    ins_i = OxmlElement("w:ins")
+    ins_i.set(qn("w:id"), "10001")
+    ins_i.set(qn("w:author"), "预置修订")
+    ins_i.set(qn("w:date"), "2026-11-19T00:00:00Z")
+    r_i = OxmlElement("w:r")
+    t_i = OxmlElement("w:t")
+    t_i.set(qn("xml:space"), "preserve")
+    t_i.text = "旧修订文字"
+    r_i.append(t_i)
+    ins_i.append(r_i)
+    pi._p.append(ins_i)
+    # 再预置一个批注锚点（整段替换应连锚点一并清，防残留空锚点）
+    crs = OxmlElement("w:commentRangeStart")
+    crs.set(qn("w:id"), "9")
+    pi._p.append(crs)
+    cre = OxmlElement("w:commentRangeEnd")
+    cre.set(qn("w:id"), "9")
+    pi._p.append(cre)
+    di.save(srci)
+    doci = docx.Document(srci)
+    replace_paragraph(doci, 1, "重写后的整段正文。")
+    doci.save(outi)
+    zi = zipfile.ZipFile(outi)
+    assert zi.testzip() is None, "G6 zip损坏"
+    bi = etree.fromstring(zi.read("word/document.xml"))
+    paras = bi.findall(".//" + qn("w:p"))
+    p0x, p1x = paras[0], paras[1]
+    assert p0x.find(".//" + qn("w:ins")) is None, "段落零不应被波及"
+    assert p1x.find(".//" + qn("w:ins")) is None and p1x.find(".//" + qn("w:del")) is None, \
+        "G6 失败：整段替换后段内残留既有修订标记"
+    assert p1x.find(".//" + qn("w:commentRangeStart")) is None, \
+        "G6 失败：批注锚点残留（空锚点）"
+    ti = "".join(t.text or "" for t in p1x.findall(".//" + qn("w:t")))
+    assert ti == "重写后的整段正文。", f"G6 替换后段内文本错: {ti!r}"
+    assert p1x.find(qn("w:pPr")) is not None, "G6 pPr 未保留"
+    # 字体继承：新 run 的 rPr 应来自段内首个 run（含直接格式 b/仿宋/32）
+    new_r = p1x.find(qn("w:r"))
+    rpr_i = new_r.find(qn("w:rPr"))
+    assert rpr_i is not None and rpr_i.find(qn("w:b")) is not None, \
+        "G6 新 run 未继承既有 run 的 rPr"
+    txt0 = "".join(t.text or "" for t in p0x.findall(".//" + qn("w:t")))
+    assert txt0 == "段落零，不动。", f"G6 邻段被误改: {txt0!r}"
+    print("G6 整段替换清场:", ti, "| 修订/批注锚点残留=无 | pPr保留")
 
     print("SELF-TEST OK")
 

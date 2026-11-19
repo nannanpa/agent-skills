@@ -1,0 +1,4 @@
+# docx-track-changes-wps 依赖（1.2.1 起）
+# 安装：pip install -r requirements.txt
+python-docx>=1.1.0
+lxml>=4.9.0
