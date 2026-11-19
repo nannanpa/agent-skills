@@ -1,6 +1,6 @@
 ---
 name: docx-track-changes-wps
-version: "1.2.1"
+version: "1.2.2"
 description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment），并合并多稿逐处标注来源、按外部意见清单批量改稿时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承、批注写入、导出修订批注清单、底纹着色标注多稿来源、整合说明图例页、按意见编号批量编排改稿、整段替换与段落/标题插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、批注、修改意见清单、合并多稿、多稿整合、三色标注、底纹标注、逐处标注来源、按意见改稿、整段替换。
 author: 马斌（nannanpa）
 contributors:
@@ -55,6 +55,8 @@ tags:
 - 改年份、日期、电话等**已在文本中间**的数字。
 
 这些场景**必须用 w:del**（删除旧文）+ 可选 w:ins（插入新文）。硬把勘误建模成"只插入"，是把技术风险转成内容错误——**那才是真错误**。1.1.0 起本技能提供 `apply_del()` / `del_insert()` 专门做这件事，并已用真实公文在 WPS 中实测通过（2026-10-30）。
+
+**⚠ 整段替换是"清场"语义，先读这条再用**（1.2.2 前置提示）：`replace_paragraph()` 会把目标段**全部内容**清掉——包括段内既有的修订标记（`w:ins`/`w:del`）、**批注及其锚点**、超链接/域，只留段落格式与书签。对带批注或修订史的段落执行整段替换，等于**放弃这些留痕**；需要保留批注/修订史的，改用 `apply_del`（勘误留痕）。动手前先跑 `export_markup` 导出修订批注清单留档，替换后按需重挂。详见「按意见清单逐处改稿」节的硬规矩。
 
 ## WPS 彩虹圈规避清单（必查）
 
@@ -371,7 +373,14 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 - **目标段带超链接、域代码或既有批注，能整段替换吗**：能，但这些都是"内容"，会随替换**一并消失**（含批注引用）。段里的批注意见若还要留，先跑 `export_markup` 导出清单，替换后按需重挂。
 - **命令行退出码怎么读**：0 成功｜1 输入/用法错（参数、文件、锚点未命中）｜2 结构校验未通过（产物不可信）。程序化调用按码分流；库接口（import 方式）不设退出码，直接抛异常由调用方捕获。
 
-现成的 WPS 安全实现见 `scripts/apply_track_changes.py`，提供 `apply(paragraph_index, anchor_phrase, insert_text)` 辅助函数。
+现成的 WPS 安全实现见 `scripts/apply_track_changes.py`。修订主接口真实签名（与上文表格一致）：
+
+```python
+apply(doc, counter, author, date_iso, p_idx, phrase, text)        # 锚点短语后插入修订
+apply_del(doc, counter, author, date_iso, p_idx, phrase, replacement="")  # 勘误删旧换新
+```
+
+`doc`＝python-docx 文档对象、`counter`＝修订 id 计数器列表（由 `open_for_revision()` 返回）、`p_idx`／`phrase`／`text`＝段落号（0 起）／锚点短语／新增文字。批量改稿接口见 `scripts/merge_markup.py`（`--opinions` 配置驱动，含命令行入口）。
 
 ---
 

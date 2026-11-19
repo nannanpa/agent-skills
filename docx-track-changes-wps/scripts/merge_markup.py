@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""合并多稿 / 按意见逐处改稿的结构化编辑脚本（docx-track-changes-wps 1.2.1 配套）。
+"""合并多稿 / 按意见逐处改稿的结构化编辑脚本（docx-track-changes-wps 1.2.2 配套）。
 
 与 apply_track_changes.py 的关系：**并行机制，不互相替代**。
   · apply_track_changes.py —— 写入真正的"修订模式"（w:ins / w:del），记录"改了什么"；
@@ -28,6 +28,7 @@ CCE5FF/FFFF99 在 WPS 正常显示）；字体继承锚点 run，不凭空造不
 """
 import copy
 import json
+import os
 import sys
 
 import docx
@@ -294,6 +295,148 @@ def merge_by_paragraph(base_paras, incoming_paras):
     return out
 
 
+def _die(msg, hint, code=1):
+    """报错退出。退出码分区（1.2.2 起，与 apply_track_changes.py 同口径）：
+
+    0 = 成功（含"部分意见 skipped"——skipped 是显式标注，不是失败）
+    1 = 用法/输入/环境错误（参数不齐、文件不存在、不是有效 .docx、
+        段号越界、config 解析失败、意见执行出错）
+    2 = 产物结构校验未通过（保存后 zip/XML 完整性断言失败，产物不可信）
+    """
+    print(f"❌ {msg}")
+    print(f"💡 怎么办：{hint}")
+    print(f"（退出码 {code}：0 成功｜1 输入/用法错｜2 结构校验未通过）")
+    sys.exit(code)
+
+
+def _integrity_check(path):
+    """保存后完整性断言（zip 完好 + document.xml 可解析）。失败退 2。"""
+    import zipfile
+    from lxml import etree
+    try:
+        z = zipfile.ZipFile(path)
+        assert z.testzip() is None, "zip corrupted"
+        etree.fromstring(z.read("word/document.xml"))
+    except AssertionError as e:
+        _die(f"结构校验未通过：{e}", "输入文件结构可能有问题；先跑 apply_track_changes.py 的 self_test.py 确认环境，再换副本重试。", code=2)
+    except Exception as e:
+        _die(f"结构校验未通过：{e}", "产物文件可能写坏（磁盘/杀软拦截？）；换输出路径重试。", code=2)
+
+
+def main(argv=None):
+    import argparse
+    import importlib.util as _ilu
+
+    class _ArgParser(argparse.ArgumentParser):
+        """参数错误改退 1（argparse 默认退 2，与本脚本"2=结构校验未通过"码位冲突）。"""
+        def error(self, message):
+            self.print_usage(sys.stderr)
+            _die(f"参数错误：{message}", "四种操作互斥，一次执行一种；完整用法跑 --help。", code=1)
+
+    ap = _ArgParser(
+        prog="merge_markup.py",
+        description="合并多稿 / 按意见逐处改稿命令行（1.2.2 起）。"
+                    "四种操作互斥，一次执行一种；原文档不动，产物写 OUT。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="示例：\n"
+               "  python3 merge_markup.py 原件.docx 整合.docx --replace 5 \"重写后的整段正文。\"\n"
+               "  python3 merge_markup.py 原件.docx 整合.docx --insert-after 8 \"（新增补充说明）\"\n"
+               "  python3 merge_markup.py 原件.docx 整合.docx --heading-after 9 \"五、征集意见情况\"\n"
+               "  python3 merge_markup.py 原件.docx 整合.docx --opinions opinions.json\n"
+               "退出码：0 成功｜1 输入/用法错｜2 结构校验未通过。\n"
+               "注意：--replace 是清场语义——目标段既有修订/批注/超链接一并清除（先 export_markup 留档）。",
+    )
+    ap.add_argument("src", help="原件 .docx（不会被修改）")
+    ap.add_argument("out", help="产物 .docx")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--replace", nargs=2, metavar=("段号", "新文本"),
+                   help="整段替换（清场语义，见 epilog 警告）")
+    g.add_argument("--insert-after", nargs=2, metavar=("段号", "文本"),
+                   help="在指定段后插入新段落")
+    g.add_argument("--heading-after", nargs=2, metavar=("段号", "标题"),
+                   help="在指定段后插入黑体标题段落")
+    g.add_argument("--opinions", metavar="config.json",
+                   help="按'意见编号→改动'配置批量编排（含 correct 勘误时自动启用修订并注入 apply_del）")
+    args = ap.parse_args(argv)
+
+    def _seg(v, what):
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            _die(f"{what} 不是整数：{v!r}", "段号从 0 起计，如 --replace 5 \"新文本\"。", code=1)
+        if n < 0:
+            _die(f"{what} 不能为负：{n}", "段号从 0 起计。", code=1)
+        return n
+
+    def _open(path):
+        try:
+            return docx.Document(path)
+        except FileNotFoundError:
+            _die(f"找不到文件：{path}", "检查路径拼写；含空格的路径用引号包住。", code=1)
+        except Exception as e:
+            m = str(e)
+            if "Content_Types" in m or "no such file" in m.lower() or "BadZipFile" in type(e).__name__:
+                _die(f"{path} 不是有效的 .docx 文件", "确认扩展名是 .docx 而不是 .doc/.rtf/.wps；必要时先用 WPS 另存为 .docx。", code=1)
+            _die(f"打开失败：{m}", "先用 apply_track_changes.py 的 self_test.py 验证环境。", code=1)
+
+    def _seg_ok(doc, n):
+        if n >= len(doc.paragraphs):
+            _die(f"段号越界：{n}（全文共 {len(doc.paragraphs)} 段，0 起）",
+                 "先确认段号；可在 Python 里 len(doc.paragraphs) 数一遍，或用 export 清单核对。", code=1)
+
+    try:
+        doc = _open(args.src)
+        if args.replace:
+            n = _seg(args.replace[0], "段号"); _seg_ok(doc, n)
+            replace_paragraph(doc, n, args.replace[1])
+            print(f"OK: 段 {n} 已整段替换（清场语义：既有修订/批注/超链接一并清除）")
+        elif args.insert_after:
+            n = _seg(args.insert_after[0], "段号"); _seg_ok(doc, n)
+            insert_paragraph_after(doc, n, args.insert_after[1])
+            print(f"OK: 段 {n} 后已插入新段落")
+        elif args.heading_after:
+            n = _seg(args.heading_after[0], "段号"); _seg_ok(doc, n)
+            insert_heading_after(doc, n, args.heading_after[1])
+            print(f"OK: 段 {n} 后已插入标题段落")
+        else:  # --opinions
+            try:
+                with open(args.opinions, encoding="utf-8") as f:
+                    config = json.load(f)
+            except FileNotFoundError:
+                _die(f"找不到配置文件：{args.opinions}", "config.json 路径检查；格式见 SKILL.md「按意见清单逐处改稿」。", code=1)
+            except json.JSONDecodeError as e:
+                _die(f"配置文件不是合法 JSON：{e}", "检查 config.json 语法；格式见 SKILL.md「按意见清单逐处改稿」。", code=1)
+            ops = {it.get("op") for it in config.get("opinions", [])}
+            apply_del_fn = None
+            if "correct" in ops:
+                # 勘误需要修订环境与计数器：经 open_for_revision 重开注入
+                spec = _ilu.spec_from_file_location(
+                    "atc", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        "apply_track_changes.py"))
+                atc = _ilu.module_from_spec(spec); spec.loader.exec_module(atc)
+                doc, counter, author, date_iso = atc.open_for_revision(args.src)
+                apply_del_fn = (lambda d, c, a, dt, pidx, ph, tx:
+                                atc.apply_del(d, counter, a or author, dt or date_iso,
+                                              pidx, ph, tx or ""))
+            results = apply_opinions(doc, config, apply_del_fn=apply_del_fn)
+            errors = 0
+            for oid, op, status in results:
+                print(f"  意见 {oid} [{op}] → {status}")
+                if status.startswith("error:"):
+                    errors += 1
+            if errors:
+                _die(f"{errors} 条意见执行出错（其余已完成并保存）",
+                     "逐条核对上面 error 的段号/短语；修正 config 后重跑。", code=1)
+            print(f"OK: 意见编排完成（{len(results)} 条）")
+        doc.save(args.out)
+    except SystemExit:
+        raise
+    except OSError as e:
+        _die(f"写文件失败：{e}", "检查输出路径可写；含空格的路径用引号包住。", code=1)
+    except Exception as e:
+        _die(f"处理失败：{type(e).__name__}: {e}", "先跑 apply_track_changes.py 的 self_test.py 验证环境；仍失败时保留原件并到 SKILL.md「已知坑」对照排查。", code=1)
+    _integrity_check(args.out)
+
+
 if __name__ == "__main__":
-    print(__doc__)
-    sys.exit(0 if "--help" in sys.argv or len(sys.argv) == 1 else 0)
+    main()

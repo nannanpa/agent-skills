@@ -16,6 +16,8 @@ G. 合并多稿（1.2.0）：w:shd 三色底纹、图例页、整段替换、段
 G6 整段替换回归（1.2.1）：目标段自带既有 w:ins 修订时，replace_paragraph
    必须连修订包裹一并清掉——1.2.0 只清直系 w:r 致旧修订文字残留
    （v1.2.0 评测点名、代码级实锤）。
+G7 merge_markup 命令行（1.2.2）：--replace/--opinions（含 correct 自动注入
+   apply_del 并启用修订）实跑，退出码 0/1 分区实测。
 跑通 = 全部断言通过。Windows WPS 首次使用前，另需人工完成 SKILL.md
 "适用环境与未验证声明"里的三步验收（打开/显示/接受拒绝修订）。
 """
@@ -379,6 +381,52 @@ def main():
     txt0 = "".join(t.text or "" for t in p0x.findall(".//" + qn("w:t")))
     assert txt0 == "段落零，不动。", f"G6 邻段被误改: {txt0!r}"
     print("G6 整段替换清场:", ti, "| 修订/批注锚点残留=无 | pPr保留")
+
+    # ── G7（1.2.2 新增）：merge_markup 命令行 ────────────────────────
+    import json as _json
+    import subprocess
+    MM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merge_markup.py")
+    src7 = os.path.join(tmpdir, "srcg7.docx")
+    d7 = docx.Document()
+    d7.add_paragraph("甲段原文。")
+    d7.add_paragraph("乙段原文。")
+    d7.save(src7)
+    out7 = os.path.join(tmpdir, "outg7.docx")
+
+    rc = subprocess.run([sys.executable, MM, src7, out7, "--replace", "1", "重写后的乙段。"],
+                        capture_output=True, text=True)
+    assert rc.returncode == 0, f"G7 --replace 失败: rc={rc.returncode} {rc.stdout[-200:]}{rc.stderr[-200:]}"
+    b7 = etree.fromstring(zipfile.ZipFile(out7).read("word/document.xml"))
+    t7 = "".join(t.text or "" for t in b7.findall(".//" + qn("w:t")))
+    assert "重写后的乙段。" in t7 and "甲段原文。" in t7, f"G7 替换文本错: {t7}"
+
+    rc = subprocess.run([sys.executable, MM, src7, out7, "--replace", "abc", "x"],
+                        capture_output=True, text=True)
+    assert rc.returncode == 1, f"G7 非整数段号应退 1: {rc.returncode}"
+    rc = subprocess.run([sys.executable, MM, src7, out7, "--replace", "99", "x"],
+                        capture_output=True, text=True)
+    assert rc.returncode == 1, f"G7 段号越界应退 1: {rc.returncode}"
+    rc = subprocess.run([sys.executable, MM, src7, out7], capture_output=True, text=True)
+    assert rc.returncode != 0, "G7 缺操作参数应报错（argparse 互斥组 required）"
+
+    # --opinions 含 correct：自动经 open_for_revision 启用修订并注入 apply_del
+    cfg7 = os.path.join(tmpdir, "ops7.json")
+    with open(cfg7, "w", encoding="utf-8") as f:
+        _json.dump({"opinions": [
+            {"id": 1, "op": "replace_para", "p_idx": 0, "text": "按意见重写的甲段。"},
+            {"id": 2, "op": "correct", "p_idx": 1, "phrase": "乙段", "text": "乙章"},
+        ]}, f, ensure_ascii=False)
+    rc = subprocess.run([sys.executable, MM, src7, out7, "--opinions", cfg7],
+                        capture_output=True, text=True)
+    assert rc.returncode == 0, f"G7 --opinions 失败: rc={rc.returncode} {rc.stdout[-300:]}{rc.stderr[-300:]}"
+    z7 = zipfile.ZipFile(out7)
+    b7 = etree.fromstring(z7.read("word/document.xml"))
+    assert b7.find(".//" + qn("w:del")) is not None, "G7 correct 未写入 w:del"
+    s7 = etree.fromstring(z7.read("word/settings.xml"))
+    assert s7.find(qn("w:trackChanges")) is not None, "G7 correct 未启用 trackChanges"
+    del_texts = [dt.text or "" for dt in b7.findall(".//" + qn("w:delText"))]
+    assert "乙段" in "".join(del_texts), f"G7 勘误原句未入 w:delText: {del_texts}"
+    print("G7 merge_markup CLI: replace/码位1/越界1/缺参/opinions(correct) 全过")
 
     print("SELF-TEST OK")
 
