@@ -26,6 +26,9 @@ G10 意见同段冲突检测（1.2.3）：先 correct 后 replace_para 同段组
    标 skipped:conflict，勘误留痕不被清场吞掉。
 G11 CLI 码位统一（1.2.3）：add_comment（缺 --phrase 退 1、成功退 0 且保存
    后自动 verify）、export_markup（缺文件退 1、成功退 0）。
+G12 批注部件合并保留（1.2.4）：文档自带批注时再追加批注，既有批注正文
+   必须原样保留、id 不撞、comments.xml 关系只登记一条；--anchor 未命中
+   必须报错；add_comment 非法段落号退 1 且不抛堆栈。
 跑通 = 全部断言通过。Windows WPS 首次使用前，另需人工完成 SKILL.md
 "适用环境与未验证声明"里的三步验收（打开/显示/接受拒绝修订）。
 """
@@ -520,6 +523,54 @@ def main():
         rc = subprocess.run([sys.executable, cli, "--help"], capture_output=True, text=True)
         assert rc.returncode == 0, f"G11 {name} --help 应退 0: {rc.returncode}"
     print("G11 CLI 码位统一: export 1/0, add_comment 1/0（含保存后自动 verify）, 四脚本 --help 退 0")
+
+    # ── G12（1.2.4 新增）：批注部件合并保留 ─────────────────────────
+    REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+    src12 = os.path.join(tmpdir, "srcg12.docx")
+    out12a = os.path.join(tmpdir, "outg12a.docx")
+    out12b = os.path.join(tmpdir, "outg12b.docx")
+    d12 = docx.Document()
+    _styled_run(d12, "正文测试内容，用于验证批注合并。")
+    d12.save(src12)
+    doc12, _, a12, dt12 = open_for_revision(src12)
+    add_comment(doc12, 0, "正文", "第一条批注", a12, dt12)
+    save_with_comments(doc12, out12a)
+    # 重开再追加第二条：既有批注正文必须原样保留、rel 不得重复
+    doc12b = docx.Document(out12a)
+    add_comment(doc12b, 0, "验证", "第二条批注", a12, dt12)
+    save_with_comments(doc12b, out12b)
+    z12 = zipfile.ZipFile(out12b)
+    cs12 = etree.fromstring(z12.read("word/comments.xml")).findall(qn("w:comment"))
+    texts12 = ["".join(t.text or "" for t in c.findall(".//" + qn("w:t"))) for c in cs12]
+    assert len(cs12) == 2, f"G12 合并后应 2 条批注，实得 {len(cs12)}: {texts12}"
+    assert "第一条批注" in texts12, f"G12 原批注正文丢失: {texts12}"
+    assert "第二条批注" in texts12, f"G12 新批注缺失: {texts12}"
+    ids12 = [c.get(qn("w:id")) for c in cs12]
+    assert len(set(ids12)) == len(ids12), f"G12 批注 id 撞号: {ids12}"
+    rels12 = etree.fromstring(z12.read("word/_rels/document.xml.rels"))
+    rel_cnt = sum(1 for r in rels12.findall("{%s}Relationship" % REL_NS)
+                  if r.get("Target") == "comments.xml")
+    assert rel_cnt == 1, f"G12 comments.xml 关系重复登记: {rel_cnt}"
+    assert z12.namelist().count("word/comments.xml") == 1, \
+        "G12 zip 内 comments.xml 条目重复（重写时写了两次）"
+    verify(out12b, check_comments=True)      # 合并后三方 id 配对仍成立
+    # --anchor 未命中必须报错（不得静默挂错）
+    raised = False
+    try:
+        d12c = docx.Document(out12b)
+        add_comment(d12c, 0, "正文", "第三条", a12, dt12,
+                    anchor_phrase="不存在的短语")
+    except ValueError:
+        raised = True
+    assert raised, "G12 anchor 未命中应报错（不得静默）"
+    # CLI 非法段落号 → 退 1 且不抛堆栈
+    rc = subprocess.run([sys.executable, AC, src12,
+                         os.path.join(tmpdir, "x12.docx"),
+                         "abc", "内容", "--phrase", "正文"],
+                        capture_output=True, text=True)
+    assert rc.returncode == 1 and "Traceback" not in rc.stderr, \
+        f"G12 非法段落号应退 1 且无堆栈: rc={rc.returncode} {rc.stderr[-200:]}"
+    print("G12 批注合并保留: 2 条正文俱在、id 不撞、rel=1 | anchor 报错 | 非法段落号退 1")
 
     print("SELF-TEST OK")
 

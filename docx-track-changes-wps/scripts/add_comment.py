@@ -27,6 +27,7 @@
     python3 add_comment.py 原件.docx 输出.docx 段落号 "批注内容" --phrase 挂载锚点 [--anchor 另锚短语] [作者] [日期ISO]
     （--phrase 必填：决定批注挂在谁身上；--anchor 可选：把批注锚到另一处，如被删掉的那段字）
 """
+import copy
 import os
 import sys
 import zipfile
@@ -175,10 +176,13 @@ def add_comment(doc, p_idx, phrase, text, author="审校",
     # anchor_phrase：批注锚到另一处（通常是"被删掉的那段字"）
     if anchor_phrase:
         other = _find_run(p_el, anchor_phrase)
-        if other is not None:
-            op = other.getparent()
-            anchor_el = op if (op is not None and
-                               op.tag in (qn("w:ins"), qn("w:del"))) else other
+        if other is None:
+            # 1.2.4：不再静默忽略——锚不到就报错，防批注悄悄挂错位置
+            raise ValueError(
+                f"另锚短语未找到: 段落 {p_idx} 中不含 {anchor_phrase!r}（批注未写入）")
+        op = other.getparent()
+        anchor_el = op if (op is not None and
+                           op.tag in (qn("w:ins"), qn("w:del"))) else other
 
     # 顺序必须是 start → 被批注内容 → end → reference
     # （commentReference 必须在 commentRangeEnd **之后**，否则 WPS/Word 认不出引用）
@@ -201,8 +205,20 @@ class _RunShim:
 
 
 # ── comments.xml 与 zip 后处理 ────────────────────────────────────────────
-def _build_comments_xml(comments):
+def _build_comments_xml(comments, existing_xml=None):
+    """构造 comments.xml。
+
+    `existing_xml` 存在时**先原样保留其全部 w:comment 条目**，再追加新批注
+    （1.2.4 修：旧版直接重建整个部件、只写本次新增，文档原有批注正文全丢）。
+    """
     root = etree.Element("{%s}comments" % W_NS, nsmap={"w": W_NS})
+    if existing_xml:
+        try:
+            old = etree.fromstring(existing_xml)
+            for c in old.findall("{%s}comment" % W_NS):
+                root.append(copy.deepcopy(c))
+        except Exception:
+            pass            # 既有部件损坏时不阻断：退化为只写新批注
     for cid, author, date_iso, text in comments:
         c = etree.SubElement(root, "{%s}comment" % W_NS)
         c.set("{%s}id" % W_NS, str(cid))
@@ -222,7 +238,11 @@ def _build_comments_xml(comments):
 
 
 def _inject_comments(docx_path, comments):
-    """把批注部件注入已保存的 docx（Content_Types + 关系 + comments.xml）。"""
+    """把批注部件注入已保存的 docx（Content_Types + 关系 + comments.xml）。
+
+    1.2.4：comments.xml **合并写入**——既有条目原样保留、只在后面追加新批注；
+    关系（rel）与 Content_Types 均判重，重复保存不重复登记。
+    """
     with zipfile.ZipFile(docx_path, "r") as zin:
         items = [(n, zin.read(n)) for n in zin.namelist()]
 
@@ -235,29 +255,36 @@ def _inject_comments(docx_path, comments):
         ov.set("PartName", "/word/comments.xml")
         ov.set("ContentType", COMMENTS_CT)
 
-    # ③ 关系：document.xml.rels → comments.xml
+    # ③ 关系：document.xml.rels → comments.xml（已登记则复用，不重复追加）
     rels_name = "word/_rels/document.xml.rels"
     rels = etree.fromstring(dict(items)[rels_name])
-    max_id = 0
-    for rel in rels.findall("{%s}Relationship" % REL_NS):
-        rid = rel.get("Id") or ""
-        if rid.startswith("rId") and rid[3:].isdigit():
-            max_id = max(max_id, int(rid[3:]))
-    new_rid = "rId%d" % (max_id + 1)
-    rel = etree.SubElement(rels, "{%s}Relationship" % REL_NS)
-    rel.set("Id", new_rid)
-    rel.set("Type", COMMENTS_RT)
-    rel.set("Target", "comments.xml")
+    existing_rels = rels.findall("{%s}Relationship" % REL_NS)
+    have_rel = any(r.get("Target") == "comments.xml" or r.get("Type") == COMMENTS_RT
+                   for r in existing_rels)
+    if not have_rel:
+        max_id = 0
+        for rel in existing_rels:
+            rid = rel.get("Id") or ""
+            if rid.startswith("rId") and rid[3:].isdigit():
+                max_id = max(max_id, int(rid[3:]))
+        rel = etree.SubElement(rels, "{%s}Relationship" % REL_NS)
+        rel.set("Id", "rId%d" % (max_id + 1))
+        rel.set("Type", COMMENTS_RT)
+        rel.set("Target", "comments.xml")
 
     data = dict(items)
     data["[Content_Types].xml"] = etree.tostring(
         ct, xml_declaration=True, encoding="UTF-8", standalone=True)
     data[rels_name] = etree.tostring(
         rels, xml_declaration=True, encoding="UTF-8", standalone=True)
-    data["word/comments.xml"] = _build_comments_xml(comments)
+    # 合并保留既有批注正文（1.2.4）
+    data["word/comments.xml"] = _build_comments_xml(
+        comments, data.get("word/comments.xml"))
 
-    # 重写 zip：把 [Content_Types].xml 放在首位（OPC 规范要求它先出现）
-    order = [n for n, _ in items if n != "[Content_Types].xml"]
+    # 重写 zip：把 [Content_Types].xml 放在首位（OPC 规范要求它先出现）；
+    # comments.xml 只在末尾写一次——输入已带该部件时若也走循环会写出重复条目
+    order = [n for n, _ in items
+             if n not in ("[Content_Types].xml", "word/comments.xml")]
     with zipfile.ZipFile(docx_path, "w", zipfile.ZIP_DEFLATED) as zout:
         zout.writestr("[Content_Types].xml", data["[Content_Types].xml"])
         for n in order:
@@ -320,7 +347,12 @@ if __name__ == "__main__":
         _die("参数不足",
              "用法：python3 add_comment.py 原件.docx 输出.docx 段落号 \"批注内容\" "
              "--phrase 挂载锚点 [--anchor 另锚短语] [作者] [日期ISO]")
-    src, out, p_idx, ctext = args[0], args[1], int(args[2]), args[3]
+    try:
+        p_idx = int(args[2])
+    except (TypeError, ValueError):
+        # 1.2.4：段落号转换纳入捕获，非法整数不再抛堆栈
+        _die(f"段落号不是整数：{args[2]!r}", "段落号从 0 起计，如 8。", code=1)
+    src, out, ctext = args[0], args[1], args[3]
     author = args[4] if len(args) > 4 else "审校"
     date_iso = args[5] if len(args) > 5 else "2026-10-30T00:00:00Z"
     try:

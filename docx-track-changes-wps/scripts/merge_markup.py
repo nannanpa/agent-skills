@@ -385,10 +385,18 @@ def main(argv=None):
         return n
 
     def _open(path):
+        from docx.opc.exceptions import PackageNotFoundError
         try:
             return docx.Document(path)
         except FileNotFoundError:
             _die(f"找不到文件：{path}", "检查路径拼写；含空格的路径用引号包住。", code=1)
+        except PackageNotFoundError:
+            # python-docx 对"文件不存在"与"不是 OOXML 包"抛同一种异常
+            # （独立复测发现：两者都落到通用分支，提示文案不贴切）——按存在性分流
+            if not os.path.exists(path):
+                _die(f"找不到文件：{path}", "检查路径拼写；含空格的路径用引号包住。", code=1)
+            _die(f"{path} 不是有效的 .docx 文件",
+                 "扩展名是 .docx 不代表内容是 OOXML；必要时先用 WPS 另存为 .docx。", code=1)
         except Exception as e:
             m = str(e)
             if "Content_Types" in m or "no such file" in m.lower() or "BadZipFile" in type(e).__name__:

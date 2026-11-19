@@ -1,6 +1,6 @@
 ---
 name: docx-track-changes-wps
-version: "1.2.3"
+version: "1.2.4"
 description: 向 .docx 文档写入真正的"修订模式"（tracked changes / redline）与批注（comment），并合并多稿逐处标注来源、按外部意见清单批量改稿时使用，python-docx + lxml 实现，专为中文公文场景设计——成品必须在 WPS 中干净打开、不触发"彩虹圈/无响应"卡死。涵盖启用 trackChanges、放置 w:ins 插入、w:del 勘误与替换、段内字符偏移插入、插入内容的格式继承、批注写入、导出修订批注清单、底纹着色标注多稿来源、整合说明图例页、按意见编号批量编排改稿、整段替换与段落/标题插入、规避 WPS 死循环陷阱、保存后校验。触发词：修订模式、插入修订、修改意见标注、发文稿修订、docx 修订、WPS 修订、勘误、改错字、批注、修改意见清单、合并多稿、多稿整合、三色标注、底纹标注、逐处标注来源、按意见改稿、整段替换。
 author: 马斌（nannanpa）
 contributors:
@@ -198,6 +198,8 @@ save_with_comments(doc, out)          # 保存 + 注入批注
 
 **校验**：`verify(path, check_comments=True)` 会逐项断言——部件存在、Content_Types 已登记、rels 已登记、每个批注有 id/author/date/正文、三方 id 配对、reference 顺序正确。
 
+**既有批注的合并保留**（1.2.4）：文档自带批注时再写批注，`_inject_comments` 会**读出既有 `comments.xml` 的全部条目、原样保留后追加新批注**，Content_Types 与关系（rel）均判重复用——重复保存不会丢原批注正文、也不会堆出重复关系。1.2.3 及更早版本是"重建部件只写新批注"，**会丢原批注正文**（v1.2.3 评测点名、代码级实锤），已在本版修复。
+
 **导出清单**（`scripts/export_markup.py`，纯读取不改文件）：
 
 ```bash
@@ -258,6 +260,8 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 **边界**：`apply_opinions` 对每条改动返回 `ok`／`skipped`／`error`，**不静默吞错**；`correct`（勘误）类需显式注入 `apply_track_changes.apply_del`，未注入则标 `skipped:no_apply_del`。整段替换是**直接改写**（不留旧字、不留痕），与"勘误留痕"的 `apply_del` 用途不同——按意见重写整段用前者，改错字用后者，别混。
 
 **同段冲突检测（1.2.3）**：同一份 config 里，先做过 `correct` 的段落再执行 `replace_para` 会**吞掉该段勘误留痕**（清场语义）——这类组合不执行，返回 `skipped:conflict:p_idxN已做过勘误留痕…` 并给处置建议（两条意见合成一条 replace_para，或删掉 correct 条目）。其余组合（replace→replace、replace→correct）不拦。
+
+**★`p_idx` 是执行时的实时段号**（1.2.4 补记）：意见按 config 顺序逐条落地，**`insert_after`／`heading_after` 会新增段落、把后续段号往后推**——后面的意见若仍按原文件的段号写，就会打到错的段上（典型症状：勘误报"anchor phrase not found"）。对策：①把插入类意见排在所有替换/勘误之后；②或按段号**从大到小**排（先改后面的，再插前面的）；③或每条只操作同一段、不依赖跨段顺序。
 
 **整段替换的两条硬规矩（1.2.1）**：
 
@@ -320,6 +324,7 @@ results = apply_opinions(doc, config)   # [(id, op, "ok"/"skipped…"/"error…"
 - **整段替换只清直系 run，既有修订残留**（1.2.0 缺陷，1.2.1 修复）：目标段自带修订史时（真实公文常态），旧版 `replace_paragraph` 的 `findall(qn("w:r"))` 只匹配**直系** run，`w:ins`/`w:del` 包裹的 run 不在其中——替换后旧修订文字原样留在段里。对策：1.2.1 起 `_clear_paragraph_content` 按内容性标签清单清除（含修订包裹、超链接/域、批注锚点）；手写同类逻辑时务必按标签清单清，不要只删 `w:r`。
 - **拆分 run 丢制表符/换行**（1.2.2 缺陷，1.2.3 修复）：旧版 `split_run_at` 重建两侧文本时把 `w:tab`/`w:br`/`w:cr` 直接丢弃——含制表符/换行的 run 拆分后这些内容消失。1.2.3 起按子元素逐个归属拆分（计长口径与 `run.text` 一致：tab/br/cr 各计 1），跨界的 `w:t` 两侧各留一半。
 - **批注 id 固定 1 起号，自带批注文档必撞号**（1.2.2 及更早的缺陷，1.2.3 修复）：旧版 `add_comment` 只看本次会话待写批注。1.2.3 起起号取**文档既有批注 id 最大值＋1**（扫描正文锚点三方与已有 `comments.xml` 部件），与修订 id 的 `max(10000, 既有最大值)` 口径同构。
+- **重写 comments.xml 丢原批注正文**（1.2.3 及更早的缺陷，1.2.4 修复）：旧版 `_inject_comments` 每次都用"本次新增批注"重建整个部件——文档原有批注正文全部消失（锚点还在、正文没了，比撞号更严重的数据丢失）；重复保存还会堆重复关系。1.2.4 起合并保留既有条目、rel 判重复用。旧版产物如已丢批注，只能从原件恢复重做。
 
 ## 保存后必做校验
 

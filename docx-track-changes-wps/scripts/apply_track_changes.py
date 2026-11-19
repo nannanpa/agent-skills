@@ -26,6 +26,7 @@ A correction that cannot be expressed as an insertion MUST use w:del;
 modelling it as "insert the new text and leave the wrong text" is worse.
 """
 import copy
+import os
 import sys
 import docx
 from docx.oxml.ns import qn
@@ -512,11 +513,19 @@ if __name__ == "__main__":
             doc.save(out)
             verify(out)
     except FileNotFoundError:
-        _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。")
+        _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。", code=1)
     except AssertionError as e:
         _die(f"结构校验未通过：{e}", "先跑 self_test.py 确认环境正常；再对照 SKILL.md「彩虹圈规避清单」逐条排查。原件先用副本，别在原件上重试。", code=2)
     except Exception as e:
         m = str(e)
+        # python-docx 对"文件不存在"与"不是 OOXML 包"抛同一种异常，按存在性分流
+        # （1.2.4：独立复测发现两者原先都落到通用分支，提示文案不贴切）
+        from docx.opc.exceptions import PackageNotFoundError
+        if isinstance(e, PackageNotFoundError):
+            if not os.path.exists(src):
+                _die(f"找不到文件：{src}", "检查路径拼写；含空格的路径用引号包住。", code=1)
+            _die(f"{src} 不是有效的 .docx 文件",
+                 "确认扩展名是 .docx 而不是 .doc/.rtf/.wps；必要时先用 WPS 另存为 .docx。", code=1)
         if "Content_Types" in m or "no such file" in m.lower():
             _die(f"{src} 不是有效的 .docx 文件", "确认扩展名是 .docx 而不是 .doc/.rtf/.wps；必要时先用 WPS 另存为 .docx。", code=1)
         _die(f"处理失败：{m}", "先用 self_test.py 验证环境；仍失败时保留原件并到 SKILL.md「已知坑」对照排查。", code=1)
