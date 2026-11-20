@@ -1,0 +1,79 @@
+{
+  "_meta": {
+    "skill": "docx-format-guard",
+    "version": "1.0.0",
+    "default_set": "A",
+    "rule": "参数单为唯一取值来源；生成器只从本文件读值，不写死任何字号/行距/边距。默认走套 A；仅当用户当次明确指定“黑体22号”时才走套 B。技能不自行认文种、不按文件名猜。",
+    "unit_note": "行距/页边距/缩进单位：磅(pt) 与 厘米(cm)。首行缩进 2 字 = 2 × 正文字号(pt)。"
+  },
+  "sets": {
+    "A": {
+      "_desc": "默认（成品口径，可被引用的成品实测）",
+      "page": {
+        "size": "A4",
+        "w_cm": 21,
+        "h_cm": 29.7,
+        "margin_top_cm": 3.7,
+        "margin_bottom_cm": 3.5,
+        "margin_left_cm": 2.8,
+        "margin_right_cm": 2.6,
+        "source": "索证⑥实测，GB/T 9704（上3.7／下3.5／左2.8／右2.6 cm，A4 21×29.7）"
+      },
+      "title": {
+        "font": "方正小标宋_GBK",
+        "size_pt": 22,
+        "align": "center",
+        "bold": true,
+        "source": "索证⑥实测：方正小标宋_GBK, 22.0 pt # 非黑体；发行侧既有脚本 make_notice.py:63 同用 XBS 22pt"
+      },
+      "body": {
+        "font": "仿宋_GB2312",
+        "size_pt": 16,
+        "first_line_indent_pt": 32,
+        "line_spacing_pt": 28,
+        "source": "索证⑥实测／make_notice.py:16（仿宋_GB2312 16pt）；首行缩进 2 字=32pt；行距 355600 EMU÷12700=28 磅"
+      },
+      "heading1": {
+        "font": "黑体",
+        "size_pt": 16,
+        "source": "make_notice.py:69（一级标题 黑体 16pt）"
+      },
+      "line_spacing_rule": "EXACTLY",
+      "line_spacing_rule_source": "固定值行距，单位磅（非“行”倍数）；python-docx 须 line_spacing_rule=WD_LINE_SPACING.EXACTLY"
+    },
+    "B": {
+      "_desc": "变体（用户明确指定才走，技能不自行认文种）",
+      "page": {
+        "size": "A4",
+        "w_cm": 21,
+        "h_cm": 29.7,
+        "margin_top_cm": 3.7,
+        "margin_bottom_cm": 3.5,
+        "margin_left_cm": 2.7,
+        "margin_right_cm": 2.7,
+        "source": "发行侧既有脚本 make_notice.py:22-24（上3.7／下3.5／左2.7／右2.7 cm，自定值非国标）"
+      },
+      "title": {
+        "font": "黑体",
+        "size_pt": 22,
+        "align": "center",
+        "bold": true,
+        "source": "和欣月端 annual-report-case-selection 第6条原文：『6. **排版**（用户公文规范）：A4；大标题黑体22号居中加粗；正文仿宋16号、首行缩进2字符（Pt(32)）、行距固定30磅（WD_LINE_SPACING.EXACTLY）；标注用楷体12号。表格内可用仿宋11号。』（出处技能 annual-report-case-selection 第 6 条）"
+      },
+      "body": {
+        "font": "仿宋_GB2312",
+        "size_pt": 16,
+        "first_line_indent_pt": 32,
+        "line_spacing_pt": 30,
+        "source": "正文沿用套 A 实测（仿宋_GB2312 16pt，首行缩进2字=32pt）；行距改用套 B 30 磅"
+      },
+      "heading1": {
+        "font": "黑体",
+        "size_pt": 16,
+        "source": "同套 A（make_notice.py:69）"
+      },
+      "line_spacing_rule": "EXACTLY",
+      "line_spacing_rule_source": "固定值行距，单位磅；套 B 行距=30 磅（和欣月端脚本侧口径；发行侧 2026-10-19 通知件同用 30 磅）"
+    }
+  }
+}
