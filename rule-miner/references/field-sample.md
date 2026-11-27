@@ -134,7 +134,7 @@ python3 ~/.workbuddy/skills/rule-miner/scripts/scan.py \
 {
   "tool": "rule-miner scan.py",
   "version": "2.2.5",
-  "root": "/Users/mabin/WorkBuddy/2026-10-31-08-50-44",
+  "root": "<你的工作区>/2026-10-31-08-50-44",
   "all_distribution_desc": "全盘 .md 分布（不含已排除的噪声目录）",
   "distribution_note": "all_distribution 不含已排除的噪声目录（novels/chapters/references/dist/docs/archive 等）；candidate_distribution 仅含命中资产类关键词的 .md",
   "md_total": 20,
