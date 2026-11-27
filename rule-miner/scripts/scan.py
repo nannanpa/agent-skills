@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-rule-miner 盘点脚本 v2.2.5：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
+rule-miner 盘点脚本 v2.2.6：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
 设计原则（来自实战）：不做语义解析，只统计字节、行数与文件名；计行需逐行读取，
 故 I/O 与文件总字节同阶（但不进模型上下文）。
 
@@ -11,7 +11,7 @@ v2.1 整改（2026-10-31 发布前置对照，对应规则 A/B/C）：
   - ④ 冲突检测升级：KB_HIT 抽取知识库命中原文片段 + 初步矛盾分级(高/中)
 
 P0 整改（2026-11-01 DSH 外审回函）：
-  - P0-1 分布两段化：全盘 .md 分布（含噪声区）+ 候选分布；根目录归 (根目录)
+  - P0-1 分布两段化：全盘 .md 分布（不含已排除的噪声目录）+ 候选分布；根目录归 (根目录)
   - P0-2 新增 --root DIR 限定扫描根（默认 ~/WorkBuddy）
   - P0-3 冲突分级改窗口判定（否定词须贴近命中词）
   - P0-4 os.walk onerror 逐目录告警；kb_check 增 KB_ERR（grep 不可用/超时/报错）
@@ -31,6 +31,13 @@ v2.2.5 整改（2026-11-02，回应 2.2.4 评测 O1–O4，攒批一次发）：
   - A6 统一"分布"口径唯一表述：文本报告标题与 SKILL.md 共用 ALL_MD_DIST_DESC 常量；
         JSON meta 增加 all_distribution_desc + distribution_note，三者对齐
 
+v2.2.6 整改（2026-11-27，攒批待发，回应 2.2.5 评测）：
+  - B1 --kb 由单目录扩为多路径（重复传/逗号分隔，去重保序；多库 source 带库名前缀）
+  - B2 load_kb_multi 口径统一：任一库失败冒泡至调用方统一置 KB_ERR，不冒充 NEW
+  - B3 输出路径冲突保护：--out/--sink 目标已存在且未给 --force 时拒绝覆盖（exit 4）
+  - B4 docstring"含噪声区"改为"不含已排除的噪声目录"，与常量/JSON meta 一致
+  - B5 分布口径、阈值 80KB/64KB、落点顺序（专门文档→分册→独立）同步进 SKILL.md
+
 用法：
     python3 scripts/scan.py
     python3 scripts/scan.py --root ~/WorkBuddy/2026-10-31-08-50-44 --kb ~/WorkBuddy/记忆分册
@@ -48,7 +55,7 @@ import signal
 from collections import Counter
 from datetime import datetime
 
-_VERSION = "2.2.5"
+_VERSION = "2.2.6"
 DEFAULT_ROOT = os.path.expanduser("~/WorkBuddy")
 
 # 排除：全局记忆结构本身 + 已知噪声目录（walk 时不向下钻取）
@@ -62,7 +69,7 @@ EXCLUDE_DIRS = [
     "docs", "blob", "archive",  # 文档集/二进制/归档噪声
     "__pycache__", "_orig",     # 缓存/原始备份
 ]
-EXCLUDE_FILES = {"INDEX.md", "交接-当前状态.md", "MEMORY.md"}
+EXCLUDE_FILES = {"INDEX.md", "交接-当前状态.md", "当前待决与指针.md", "MEMORY.md"}
 
 # 单文件体积上限：超过则跳过整读，防大目录/超大文件卡死（P1-2, 2.2.3）
 MAX_FILE_BYTES = 4 * 1024 * 1024          # 4 MB
@@ -165,6 +172,22 @@ def load_kb(kb_dir: str) -> list:
             except OSError:
                 continue
             texts.append((os.path.relpath(fp, kb_dir), content))
+    return texts
+
+
+def load_kb_multi(kb_dirs: list) -> list:
+    """逐个加载多个知识库目录并合并（v2.2.6）。
+    单库时直接返回 load_kb 结果（source 格式不变，向后兼容）；
+    多库时给每条 source 加「<库目录名>/」前缀，避免同名文件出处混淆。
+    任一库读取失败不静默跳过：异常冒泡至调用方统一置 KB_ERR，宁可整批降级
+    为「未核验」，也不把失败冒充 NEW。"""
+    if len(kb_dirs) == 1:
+        return load_kb(kb_dirs[0])
+    texts = []
+    for d in kb_dirs:
+        label = os.path.basename(os.path.normpath(d))
+        for src, content in load_kb(d):
+            texts.append((f"{label}/{src}", content))
     return texts
 
 
@@ -288,7 +311,7 @@ def _selftest() -> int:
     def check(name, cond):
         checks.append((name, bool(cond)))
 
-    check("版本号为 2.2.5", _VERSION == "2.2.5")
+    check("版本号为 2.2.6", _VERSION == "2.2.6")
     check("EXCLUDE_DIRS 含关键噪声目录",
           all(d in EXCLUDE_DIRS for d in ("novels", "chapters", "references", "dist", "docs", "archive")))
     check("should_skip 命中噪声目录", should_skip("/a/novels/x.md") and should_skip("/a/references/y.md"))
@@ -300,6 +323,25 @@ def _selftest() -> int:
     check("MAX_FILE_BYTES 为 4MB", MAX_FILE_BYTES == 4 * 1024 * 1024)
     check("grade_conflict 否定词贴近→高", grade_conflict(["规则"], "此处禁止该规则") == "高")
     check("grade_conflict 无否定词→中", grade_conflict(["规则"], "此处有该规则") == "中")
+    # 多库核验：用临时目录造两个库各放同名 .md，验证前缀真能区分出处（非假绿灯）
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            d1 = os.path.join(td, "库甲"); d2 = os.path.join(td, "库乙")
+            os.makedirs(d1); os.makedirs(d2)
+            with open(os.path.join(d1, "同名.md"), "w", encoding="utf-8") as f:
+                f.write("甲库正文")
+            with open(os.path.join(d2, "同名.md"), "w", encoding="utf-8") as f:
+                f.write("乙库正文")
+            merged = load_kb_multi([d1, d2])
+            srcs = [s for s, _ in merged]
+            check("多库合并条数=2", len(merged) == 2)
+            check("多库 source 带库名前缀区分同名文件",
+                  any(s.startswith("库甲/") for s in srcs) and any(s.startswith("库乙/") for s in srcs))
+            check("单库 path 保持原 source 格式（向后兼容）",
+                  load_kb_multi([d1]) == load_kb(d1))
+    except OSError:
+        check("多库临时目录测试可执行", False)
     ok = True
     for name, passed in checks:
         mark = "✅ PASS" if passed else "❌ FAIL"
@@ -317,12 +359,16 @@ def main() -> None:
     )
     ap.add_argument("--root", metavar="DIR", default=DEFAULT_ROOT,
                     help="扫描根目录（默认 ~/WorkBuddy）；局部盘点用 --root <任务目录>")
-    ap.add_argument("--kb", metavar="DIR", help="交叉核验的知识库目录（如 ~/WorkBuddy/记忆分册）")
+    ap.add_argument("--kb", metavar="DIR", action="append", default=None,
+                    help="交叉核验的知识库目录；可重复传（--kb A --kb B）或逗号分隔（--kb A,B）"
+                         "；建议同时纳入记忆分册与用户自立的专门文档目录，消掉假 NEW")
     ap.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     ap.add_argument("--out", metavar="FILE",
                     help="将报告写入文件（不指定 --json 为文本；指定则为 JSON）")
     ap.add_argument("--sink", metavar="FILE",
                     help="脚本级落点：将报告直接写入 sink 文件，供下游 agent 消费（闭合评测点名的边缘缺口）")
+    ap.add_argument("--force", action="store_true",
+                    help="允许覆盖已存在的 --out/--sink 文件；默认拒绝覆盖以防误删既有报告（exit 4）")
     ap.add_argument("--timeout", type=float, default=30.0, metavar="SEC",
                     help="单文件读取超时上限（秒），0 关闭；超时跳过该文件并告警（默认 30）")
     ap.add_argument("--resume", metavar="FILE",
@@ -341,19 +387,24 @@ def main() -> None:
 
     # ① 工程级参数校验：中文友好报错 + 非零退出码
     root = os.path.expanduser(args.root)
-    kb_dir = None
+    kb_dirs = []  # 支持 --kb A --kb B 与 --kb A,B 两种传法；去重保序
     if args.kb:
-        kb_dir = os.path.expanduser(args.kb)
-        if not os.path.exists(kb_dir):
-            print(f"❌ 知识库路径不存在：{kb_dir}\n"
-                  f"   请检查路径是否拼写正确，或去掉 --kb 只做枚举。",
-                  file=sys.stderr)
-            sys.exit(2)
-        if not os.path.isdir(kb_dir):
-            print(f"❌ --kb 必须指向目录而非文件：{kb_dir}\n"
-                  f"   请传入知识库目录（如 ~/WorkBuddy/记忆分册）。",
-                  file=sys.stderr)
-            sys.exit(2)
+        for raw in args.kb:
+            for piece in str(raw).split(","):
+                piece = piece.strip()
+                if not piece:
+                    continue
+                d = os.path.expanduser(piece)
+                if not os.path.exists(d):
+                    print(f"❌ 知识库路径不存在：{d}\n"
+                          f"   请检查路径拼写，或去掉 --kb 只做枚举。", file=sys.stderr)
+                    sys.exit(2)
+                if not os.path.isdir(d):
+                    print(f"❌ --kb 必须指向目录而非文件：{d}\n"
+                          f"   请传入知识库目录（如 ~/WorkBuddy/记忆分册）。", file=sys.stderr)
+                    sys.exit(2)
+                if d not in kb_dirs:
+                    kb_dirs.append(d)
 
     if not os.path.isdir(root):
         print(f"❌ 扫描根目录不存在：{root}\n"
@@ -392,12 +443,13 @@ def main() -> None:
     skipped_dirs = []   # 权限/占用不可读的目录
     kb_err = False      # 知识库加载/核验是否失败（统一置位，不冒充 NEW）
     kb_texts = None     # 内存知识库：None=未提供，[]=空库，list=已载入
-    if kb_dir:
+    if kb_dirs:
         try:
-            kb_texts = load_kb(kb_dir)
+            kb_texts = load_kb_multi(kb_dirs)
         except OSError as e:
             kb_err = True
-            print(f"⚠️ 知识库目录不可读，跳过交叉核验：{kb_dir}（{e}）", file=sys.stderr)
+            print(f"⚠️ 知识库目录不可读，跳过交叉核验：{', '.join(kb_dirs)}（{e}）",
+                  file=sys.stderr)
             kb_texts = []
 
     try:
@@ -435,7 +487,7 @@ def main() -> None:
                 atype, provenance = asset_hint(rel, head_buf)
                 if not atype:
                     continue  # 非候选，跳过
-                if kb_dir:
+                if kb_dirs:
                     if kb_err:
                         status, snippet, source, grade = "KB_ERR", "", "", ""
                     else:
@@ -468,18 +520,20 @@ def main() -> None:
     now = datetime.now().isoformat(timespec="seconds")
 
     # ③ --out / --sink / 默认 stdout：报告流式落盘（A4），不拼巨型字符串
+    # 输出路径冲突保护（v2.2.6）：目标已存在且未给 --force 时拒绝覆盖，避免误删既有报告。
     targets = []
-    if args.out:
-        try:
-            targets.append(open(os.path.expanduser(args.out), "w", encoding="utf-8"))
-        except OSError as e:
-            print(f"❌ 写入报告失败：{e}", file=sys.stderr)
+    for label, path in (("报告", args.out), ("sink", args.sink)):
+        if not path:
+            continue
+        expanded = os.path.expanduser(path)
+        if os.path.exists(expanded) and not args.force:
+            print(f"❌ {label} 目标已存在，拒绝覆盖：{expanded}\n"
+                  f"   如确需覆盖请加 --force；或换一个文件名。", file=sys.stderr)
             sys.exit(4)
-    if args.sink:
         try:
-            targets.append(open(os.path.expanduser(args.sink), "w", encoding="utf-8"))
+            targets.append(open(expanded, "w", encoding="utf-8"))
         except OSError as e:
-            print(f"❌ 写入 sink 失败：{e}", file=sys.stderr)
+            print(f"❌ 写入 {label} 失败：{e}", file=sys.stderr)
             sys.exit(4)
     wrote_files = [args.out, args.sink]
     if not targets:
@@ -522,7 +576,7 @@ def main() -> None:
             f"  [汇总] 全盘 .md 总数 {all_count}（EXCLUDE_DIRS 如 novels/chapters/docs/references/dist 等已在遍历阶段剪枝，不计入；该数通常小于 find 全盘 .md 数，属正常）")
         for k, v in all_dist.most_common(40):
             writer.writeline(f"  {v:5d}  {k}")
-        kb_label = f"（已交叉核验 {kb_dir}）" if kb_dir else ""
+        kb_label = f"（已交叉核验 {len(kb_dirs)} 个库：{', '.join(os.path.basename(d) for d in kb_dirs)}）" if kb_dirs else ""
         writer.writeline(f"\n=== 知识资产候选分布（仅候选）{kb_label} ===")
         for k, v in dist.most_common(40):
             writer.writeline(f"  {v:5d}  {k}")
