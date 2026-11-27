@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-rule-miner 盘点脚本 v2.2.6：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
+rule-miner 盘点脚本 v2.2.7：廉价枚举指定根目录下的 .md，输出"知识资产候选"。
 设计原则（来自实战）：不做语义解析，只统计字节、行数与文件名；计行需逐行读取，
 故 I/O 与文件总字节同阶（但不进模型上下文）。
 
@@ -31,6 +31,7 @@ v2.2.5 整改（2026-11-02，回应 2.2.4 评测 O1–O4，攒批一次发）：
   - A6 统一"分布"口径唯一表述：文本报告标题与 SKILL.md 共用 ALL_MD_DIST_DESC 常量；
         JSON meta 增加 all_distribution_desc + distribution_note，三者对齐
 
+v2.2.7 补丁（2026-11-27）：field-sample 示例去个人绝对路径（2.2.6 线上包脱敏遗漏纠正）。
 v2.2.6 整改（2026-11-27，攒批待发，回应 2.2.5 评测）：
   - B1 --kb 由单目录扩为多路径（重复传/逗号分隔，去重保序；多库 source 带库名前缀）
   - B2 load_kb_multi 口径统一：任一库失败冒泡至调用方统一置 KB_ERR，不冒充 NEW
@@ -55,7 +56,7 @@ import signal
 from collections import Counter
 from datetime import datetime
 
-_VERSION = "2.2.6"
+_VERSION = "2.2.7"
 DEFAULT_ROOT = os.path.expanduser("~/WorkBuddy")
 
 # 排除：全局记忆结构本身 + 已知噪声目录（walk 时不向下钻取）
@@ -311,7 +312,7 @@ def _selftest() -> int:
     def check(name, cond):
         checks.append((name, bool(cond)))
 
-    check("版本号为 2.2.6", _VERSION == "2.2.6")
+    check("版本号为 2.2.7", _VERSION == "2.2.7")
     check("EXCLUDE_DIRS 含关键噪声目录",
           all(d in EXCLUDE_DIRS for d in ("novels", "chapters", "references", "dist", "docs", "archive")))
     check("should_skip 命中噪声目录", should_skip("/a/novels/x.md") and should_skip("/a/references/y.md"))
